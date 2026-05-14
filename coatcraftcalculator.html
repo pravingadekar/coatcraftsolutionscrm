@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Epoxy Material Calculator</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #e6f4ff, #fff5e6);
+            padding: 15px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 32px;
+            color: #0b5ed7;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #ff6b00;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            border: 2px solid #d9e8ff;
+            font-size: 17px;
+            outline: none;
+        }
+
+        input:focus,
+        select:focus {
+            border-color: #0b5ed7;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(90deg, #ff6b00, #0b5ed7);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 20px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            margin-top: 30px;
+            border-collapse: collapse;
+            min-width: 700px;
+        }
+
+        table th {
+            background: linear-gradient(90deg, #0b5ed7, #ff6b00);
+            color: white;
+            padding: 15px;
+            text-align: left;
+        }
+
+        table td {
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        table tr:hover {
+            background: #f9fbff;
+        }
+
+        .total {
+            margin-top: 30px;
+            background: linear-gradient(90deg, #0b5ed7, #ff6b00);
+            color: white;
+            padding: 25px;
+            border-radius: 20px;
+            text-align: center;
+        }
+
+        .total h2 {
+            margin-top: 10px;
+            font-size: 40px;
+        }
+
+        .total h3 {
+            margin-top: 15px;
+        }
+
+        .note {
+            margin-top: 20px;
+            color: #ff6b00;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        @media(max-width:768px) {
+
+            h1 {
+                font-size: 24px;
+            }
+
+            label {
+                font-size: 16px;
+            }
+
+            table th,
+            table td {
+                font-size: 14px;
+                padding: 12px;
+            }
+
+            .total h2 {
+                font-size: 30px;
+            }
+
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>Epoxy Material Calculator</h1>
+
+        <div class="form-group">
+            <label>Enter Area (Sqft)</label>
+            <input type="number" id="area" placeholder="Example 20000">
+        </div>
+
+        <div class="form-group">
+            <label>Select Thickness</label>
+
+            <select id="mm">
+                <option value="2">2 MM</option>
+                <option value="3">3 MM</option>
+            </select>
+
+        </div>
+
+        <div class="form-group">
+            <label>Labour Charge Per Sqft</label>
+            <input type="number" id="labourRate" value="8">
+        </div>
+
+        <div class="form-group">
+            <label>Profit Per Sqft</label>
+            <input type="number" id="profitRate" value="5">
+        </div>
+
+        <div class="form-group">
+            <label>Transportation Charge</label>
+            <input type="number" id="transportCharge" value="10000">
+        </div>
+
+        <button onclick="calculate()">Calculate</button>
+
+        <div class="table-wrapper">
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Material</th>
+                        <th>Coverage / Kit</th>
+                        <th>Required Kits</th>
+                        <th>Rate / Kit</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    <tr>
+                        <td>Primer</td>
+                        <td>662 sqft</td>
+                        <td id="primerKit">0</td>
+                        <td>₹1930</td>
+                        <td id="primerTotal">₹0</td>
+                    </tr>
+
+                    <tr>
+                        <td id="screedName">Screed</td>
+                        <td id="screedCoverage">0 sqft</td>
+                        <td id="screedKit">0</td>
+                        <td>₹2180</td>
+                        <td id="screedTotal">₹0</td>
+                    </tr>
+
+                    <tr>
+                        <td>1MM Topcoat</td>
+                        <td>116 sqft</td>
+                        <td id="topcoatKit">0</td>
+                        <td>₹2678</td>
+                        <td id="topcoatTotal">₹0</td>
+                    </tr>
+
+                    <tr>
+                        <td>Pigment</td>
+                        <td>116 sqft</td>
+                        <td id="pigmentKit">0</td>
+                        <td>₹230</td>
+                        <td id="pigmentTotal">₹0</td>
+                    </tr>
+
+                    <tr>
+                        <td>Labour Charge</td>
+                        <td id="labourRateText">₹8/sqft</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td id="labourTotal">₹0</td>
+                    </tr>
+
+                    <tr>
+                        <td>Profit</td>
+                        <td id="profitRateText">₹5/sqft</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td id="profitTotal">₹0</td>
+                    </tr>
+
+                    <tr>
+                        <td>Transportation</td>
+                        <td>Fixed</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td id="transportTotal">₹0</td>
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        <div class="total">
+
+            <p>Grand Total</p>
+
+            <h2 id="grandTotal">₹0</h2>
+
+            <h3>
+                Cost Per Sqft :
+                <span id="perSqft">₹0</span>
+            </h3>
+
+        </div>
+
+        <div class="note">
+            GST Extra
+        </div>
+
+    </div>
+
+    <script>
+
+        function calculate() {
+
+            let area =
+                Number(document.getElementById("area").value);
+
+            let mm =
+                Number(document.getElementById("mm").value);
+
+            let labourRate =
+                Number(document.getElementById("labourRate").value);
+
+            let profitRate =
+                Number(document.getElementById("profitRate").value);
+
+            let transportCharge =
+                Number(document.getElementById("transportCharge").value);
+
+            // =========================
+            // COVERAGE
+            // =========================
+
+            let primerCoverage = 662;
+
+            let screed1mmCoverage = 124;
+
+            let screed2mmCoverage = 75;
+
+            let topcoatCoverage = 116;
+
+            // =========================
+            // RATES
+            // =========================
+
+            let primerRate = 1930;
+
+            let screedRate = 2180;
+
+            let topcoatRate = 2678;
+
+            let pigmentRate = 230;
+
+            // =========================
+            // PRIMER
+            // =========================
+
+            let primerKit =
+                Math.ceil(area / primerCoverage);
+
+            let primerTotal =
+                primerKit * primerRate;
+
+            // =========================
+            // SYSTEM LOGIC
+            // =========================
+
+            let screedKit = 0;
+
+            let topcoatKit = 0;
+
+            if (mm == 2) {
+
+                screedKit =
+                    Math.ceil(area / screed1mmCoverage);
+
+                topcoatKit =
+                    Math.ceil(area / topcoatCoverage);
+
+                document.getElementById("screedName").innerHTML =
+                    "1MM Screed";
+
+                document.getElementById("screedCoverage").innerHTML =
+                    screed1mmCoverage + " sqft";
+
+            }
+
+            if (mm == 3) {
+
+                screedKit =
+                    Math.ceil(area / screed2mmCoverage);
+
+                topcoatKit =
+                    Math.ceil(area / topcoatCoverage);
+
+                document.getElementById("screedName").innerHTML =
+                    "2MM Screed";
+
+                document.getElementById("screedCoverage").innerHTML =
+                    screed2mmCoverage + " sqft";
+
+            }
+
+            // =========================
+            // PIGMENT
+            // =========================
+
+            let pigmentKit =
+                Math.ceil(area / topcoatCoverage);
+
+            let pigmentTotal =
+                pigmentKit * pigmentRate;
+
+            // =========================
+            // TOTALS
+            // =========================
+
+            let screedTotal =
+                screedKit * screedRate;
+
+            let topcoatTotal =
+                topcoatKit * topcoatRate;
+
+            let labourTotal =
+                area * labourRate;
+
+            let profitTotal =
+                area * profitRate;
+
+            let grandTotal =
+                primerTotal +
+                screedTotal +
+                topcoatTotal +
+                pigmentTotal +
+                labourTotal +
+                profitTotal +
+                transportCharge;
+
+            let perSqft =
+                grandTotal / area;
+
+            // =========================
+            // OUTPUT
+            // =========================
+
+            document.getElementById("primerKit").innerHTML =
+                primerKit;
+
+            document.getElementById("screedKit").innerHTML =
+                screedKit;
+
+            document.getElementById("topcoatKit").innerHTML =
+                topcoatKit;
+
+            document.getElementById("pigmentKit").innerHTML =
+                pigmentKit;
+
+            document.getElementById("primerTotal").innerHTML =
+                "₹" + primerTotal.toLocaleString();
+
+            document.getElementById("screedTotal").innerHTML =
+                "₹" + screedTotal.toLocaleString();
+
+            document.getElementById("topcoatTotal").innerHTML =
+                "₹" + topcoatTotal.toLocaleString();
+
+            document.getElementById("pigmentTotal").innerHTML =
+                "₹" + pigmentTotal.toLocaleString();
+
+            document.getElementById("labourTotal").innerHTML =
+                "₹" + labourTotal.toLocaleString();
+
+            document.getElementById("profitTotal").innerHTML =
+                "₹" + profitTotal.toLocaleString();
+
+            document.getElementById("transportTotal").innerHTML =
+                "₹" + transportCharge.toLocaleString();
+
+            document.getElementById("grandTotal").innerHTML =
+                "₹" + grandTotal.toLocaleString();
+
+            document.getElementById("perSqft").innerHTML =
+                "₹" + perSqft.toFixed(2);
+
+            document.getElementById("labourRateText").innerHTML =
+                "₹" + labourRate + "/sqft";
+
+            document.getElementById("profitRateText").innerHTML =
+                "₹" + profitRate + "/sqft";
+
+        }
+
+    </script>
+
+</body>
+
+</html>

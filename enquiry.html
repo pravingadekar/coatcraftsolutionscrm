@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>CoatCraft Solutions - Epoxy Flooring Enquiry Form</title>
+
+    <meta property="og:title" content="CoatCraft Solutions - Industrial Epoxy Flooring Experts">
+    <meta property="og:description" content="Warehouse | Parking | Factory | Pharma | Maharashtra Service">
+    <meta property="og:image" content="https://workmanager.in/CoatCraftSolutions/epoxy-preview.png">
+    <meta property="og:image:secure_url" content="https://workmanager.in/CoatCraftSolutions/epoxy-preview.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:url" content="https://workmanager.in/CoatCraftSolutions/enquiry.html">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="/new_logo.png">
+    <link rel="apple-touch-icon" href="/new_logo.png">
+    <meta name="theme-color" content="#0f4a78">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            background: linear-gradient(135deg, #1e73be, #0f3057);
+        }
+
+        .container {
+            max-width: 750px;
+            margin: 40px auto;
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+        }
+
+        .brand-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .brand-logo {
+            max-width: 220px;
+            width: 100%;
+            height: auto;
+        }
+
+        .brand-title {
+            font-size: 18px;
+            color: #1e73be;
+            font-weight: 600;
+            margin: 10px 0 5px;
+        }
+
+        .brand-subtitle {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 15px;
+        }
+
+        .trust-badges {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .trust-badges span {
+            background: #f4f7fb;
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid #e0e6ed;
+        }
+
+        h2 {
+            text-align: center;
+            color: #1e73be;
+            margin-bottom: 25px;
+        }
+
+        label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .required {
+            color: red;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            margin-top: 6px;
+            margin-bottom: 18px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+            box-sizing: border-box;
+            transition: 0.3s;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            border-color: #1e73be;
+            outline: none;
+        }
+
+        button {
+            background: #1e73be;
+            color: #fff;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            width: 100%;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #155a96;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .valid-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #2ecc71;
+            font-size: 16px;
+            display: none;
+        }
+
+        .error-msg {
+            display: none;
+            color: #e74c3c;
+            font-size: 12px;
+            margin-top: -17px;
+        }
+
+        .color-section {
+            margin-bottom: 25px;
+        }
+
+        .ral-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+            gap: 10px;
+            margin-top: -10px;
+        }
+
+        .ral-box {
+            height: 40px;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 2px solid #ddd;
+            transition: 0.2s;
+        }
+
+        .ral-box:hover {
+            transform: scale(1.1);
+            border-color: #1e73be;
+        }
+
+        .ral-box.active {
+            border: 3px solid #1e73be;
+            box-shadow: 0 0 8px rgba(30, 115, 190, 0.5);
+        }
+
+        .ral-link {
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        .ral-link a {
+            color: #1e73be;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        input.error {
+            border-color: #e74c3c;
+        }
+
+        input.valid {
+            border-color: #2ecc71;
+        }
+
+        .form-step {
+            display: none;
+        }
+
+        .form-step.active {
+            display: block;
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .step {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            border-bottom: 2px solid #ccc;
+            font-size: 13px;
+        }
+
+        .step.active {
+            border-color: #1e73be;
+            font-weight: 600;
+            color: #1e73be;
+        }
+
+        .next-btn,
+        .back-btn {
+            background: #1e73be;
+            color: #fff;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .back-btn {
+            background: #777;
+            margin-bottom: 10px;
+        }
+
+        /* Popup */
+        .popup {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .popup-content {
+            background: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        /* Loader */
+        .loader-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .loader {
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid #1e73be;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media(max-width:800px) {
+            .container {
+                margin: 20px 16px;
+                padding: 24px;
+            }
+
+            .trust-badges {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .trust-badges span {
+                width: 100%;
+                text-align: center;
+            }
+        }
+
+        @media(max-width:600px) {
+            .container {
+                margin: 15px;
+                padding: 18px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <div class="brand-header">
+            <img src="https://workmanager.in/CoatCraftSolutions/new_logo.png" class="brand-logo">
+
+            <div class="brand-title">Industrial Epoxy Flooring Specialists</div>
+
+            <div class="brand-subtitle">
+                Warehouse | Parking | Factory | Pharma
+            </div>
+
+            <div class="trust-badges">
+                <span><i class="fa-solid fa-circle-check"></i> 200+ Projects Completed</span>
+                <span><i class="fa-solid fa-circle-check"></i> On-Time Project Delivery</span>
+                <span><i class="fa-solid fa-circle-check"></i> Serving Maharashtra</span>
+            </div>
+        </div>
+        <div id="notifyBanner"
+            style="display:none;margin:18px 0;padding:16px;border-radius:16px;border:1px solid #b3d4fc;background:#eaf4ff;color:#0e4f8b;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <span id="notifyBannerText">Enable notifications to receive new enquiry and follow-up alerts.</span>
+            <button id="enableNotificationsBtn"
+                style="background:#0f4a78;color:#fff;border:none;padding:10px 16px;border-radius:12px;cursor:pointer;">Enable
+                Notifications</button>
+        </div>
+
+        <h2>Epoxy Flooring Requirement Form</h2>
+
+
+        <form id="leadForm">
+
+            <!-- STEP INDICATOR -->
+            <div class="step-indicator">
+                <div class="step active" id="step1Indicator">1. Basic Details</div>
+                <div class="step" id="step2Indicator">2. Technical Details</div>
+            </div>
+
+            <!-- ================= STEP 1 ================= -->
+            <div class="form-step active" id="step1">
+
+                <label>Company Name <span class="required">*</span></label>
+                <input type="text" name="name" required>
+
+                <div class="form-group">
+                    <label>Phone Number <span class="required">*</span></label>
+                    <div class="input-wrapper">
+                        <input type="tel" name="phone" id="phone" maxlength="10" inputmode="numeric" required>
+                        <span class="valid-icon" id="phoneValid"><i class="fa-solid fa-check"></i></span>
+                    </div>
+                    <div class="error-msg" id="phoneError">
+                        Enter valid 10 digit Indian mobile number (starting with 6-9)
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Email Address <span class="required">*</span></label>
+                    <div class="input-wrapper">
+                        <input type="email" name="email" id="email" required>
+                        <span class="valid-icon" id="emailValid"><i class="fa-solid fa-check"></i></span>
+                    </div>
+                    <div class="error-msg" id="emailError">
+                        Enter valid email address
+                    </div>
+                </div>
+
+                <label>Project Location <span class="required">*</span></label>
+                <input type="text" name="location" required>
+
+                <label>Total Area <span class="required">*</span></label>
+                <select name="area" required>
+                    <option value="">Select Area</option>
+                    <option>100 - 500 sqft</option>
+                    <option>500 - 1000 sqft</option>
+                    <option>1000 - 5000 sqft</option>
+                    <option>5000 - 10000 sqft</option>
+                    <option>10000 - 50000 sqft</option>
+                    <option>50000+ sqft</option>
+                    <option>Not Sure</option>
+                </select>
+
+                <label>Slab Type <span class="required">*</span></label>
+                <select name="slab" required>
+                    <option value="">Select Slab Type</option>
+                    <option>New Slab</option>
+                    <option>Old Slab</option>
+                </select>
+
+                <label>Industry / Usage <span class="required">*</span></label>
+                <select name="industry_usage" required>
+                    <option value="">Select Usage</option>
+                    <option>Warehouse</option>
+                    <option>Factory</option>
+                    <option>Parking</option>
+                    <option>Pharmaceutical</option>
+                    <option>Food Processing</option>
+                    <option>Commercial</option>
+                    <option>Residential</option>
+                    <option>No Idea</option>
+                </select>
+
+                <label>Forklift / Heavy Load? <span class="required">*</span></label>
+                <select name="heavyload" required>
+                    <option value="">Select Option</option>
+                    <option>Yes</option>
+                    <option>No</option>
+                </select>
+
+                <label>Timeline</label>
+                <select name="timeline">
+                    <option value="">Select Timeline</option>
+                    <option>Immediate</option>
+                    <option>Within 7 Days</option>
+                    <option>Within 15 Days</option>
+                    <option>Within 1 Month</option>
+                </select>
+                <label>Epoxy Type <span class="required">*</span></label>
+                <select name="epoxy_type" required>
+                    <option value="">Select Type</option>
+                    <option>Self Leveling Epoxy</option>
+                    <option>Epoxy Flooring</option>
+                    <option>PU Concreate Flooring</option>
+                    <option>EPU Flooring</option>
+                    <option>ESD Flooring</option>
+                    <option>Chemical Resistance Flooring</option>
+                    <option>Anti Static Epoxy</option>
+                    <option>PU Flooring</option>
+                    <option>Not Sure</option>
+                </select>
+
+                <label>Required Thickness</label>
+                <select name="thickness">
+                    <option value="">Select Thickness</option>
+                    <option>1 mm</option>
+                    <option>2 mm</option>
+                    <option>3 mm</option>
+                    <option>4 mm</option>
+                    <option>5 mm</option>
+                    <option>Not Sure</option>
+                </select>
+
+                <label>Additional Notes</label>
+                <textarea name="message"></textarea>
+
+                <button type="button" class="next-btn" onclick="nextStep()">Next →</button>
+
+            </div>
+
+
+            <!-- ================= STEP 2 ================= -->
+            <div class="form-step" id="step2">
+
+                <h3 style="color:#1e73be;">🧱 Concrete & Surface</h3>
+
+                <select name="concrete_grade">
+                    <option value="">Concrete Grade</option>
+                    <option>M20</option>
+                    <option>M25</option>
+                    <option>M30</option>
+                    <option>Not Sure</option>
+                </select>
+
+                <select name="slab_age">
+                    <option value="">Slab Age</option>
+                    <option>Less than 3 Months</option>
+                    <option>3 - 6 Months</option>
+                    <option>6 - 12 Months</option>
+                    <option>1 - 3 Years</option>
+                    <option>More than 3 Years</option>
+                    <option>Not Sure</option>
+                </select>
+
+                <select name="cracks">
+                    <option value="">Visible Cracks?</option>
+                    <option>No Visible Damage</option>
+                    <option>Minor Hairline Cracks</option>
+                    <option>Major Cracks</option>
+                    <option>Hollow Sound Areas</option>
+                    <option>Not Sure</option>
+                </select>
+
+                <select name="contamination">
+                    <option value="">Surface Contamination?</option>
+                    <option>None</option>
+                    <option>Oil</option>
+                    <option>Grease</option>
+                    <option>Chemical Spill</option>
+                    <option>Not Sure</option>
+                </select>
+
+                <select name="previous_coating">
+                    <option value="">Previous Coating?</option>
+                    <option>None</option>
+                    <option>Paint</option>
+                    <option>Epoxy</option>
+                    <option>PU</option>
+                </select>
+
+
+                <h3 style="color:#1e73be;">⚙ Usage & Load</h3>
+
+                <select name="industry_type">
+                    <option value="">Detailed Industry Type</option>
+                    <option>Manufacturing</option>
+                    <option>Cold Storage</option>
+                    <option>Automobile</option>
+                    <option>Pharma Production</option>
+                    <option>Parking Area</option>
+                    <option>Other</option>
+                    <option>Not Sure</option>
+                </select>
+
+                <select name="forklift">
+                    <option value="">Forklift / Pallet Trucks?</option>
+                    <option>Yes</option>
+                    <option>No</option>
+                </select>
+
+                <select name="max_load">
+                    <option value="">Maximum Load</option>
+                    <option>Light Load</option>
+                    <option>Medium Load</option>
+                    <option>Heavy Load</option>
+                    <option>Very Heavy (5+ Tons)</option>
+                    <option>Not Sure</option>
+                </select>
+
+                <select name="chemical_exposure">
+                    <option value="">Chemical Exposure?</option>
+                    <option>None</option>
+                    <option>Acid</option>
+                    <option>Solvent</option>
+                    <option>Oil</option>
+                </select>
+
+
+                <h3 style="color:#1e73be;">💧 Environment</h3>
+
+                <select name="moisture_issue">
+                    <option value="">Moisture / Dampness?</option>
+                    <option>Yes</option>
+                    <option>No</option>
+                </select>
+
+                <select name="water_washing">
+                    <option value="">Frequent Water Washing?</option>
+                    <option>Yes</option>
+                    <option>No</option>
+                </select>
+
+                <select name="anti_skid">
+                    <option value="">Anti-skid Required?</option>
+                    <option>Yes</option>
+                    <option>No</option>
+                </select>
+
+
+                <h3 style="color:#1e73be;">🎨 Finish</h3>
+
+                <div class="color-section">
+
+                    <label>Preferred Color (RAL Code)</label>
+
+                    <input type="text" name="preferred_color" id="preferred_color"
+                        placeholder="Click a color below or type manually">
+
+                    <div class="ral-grid">
+
+                        <div class="ral-box" data-ral="RAL 7035" title="RAL 7035 - Light Grey"
+                            style="background:#D7D7D7;"></div>
+                        <div class="ral-box" data-ral="RAL 7040" title="RAL 7040 - Window Grey"
+                            style="background:#9DA3A6;"></div>
+                        <div class="ral-box" data-ral="RAL 7016" title="RAL 7016 - Anthracite Grey"
+                            style="background:#383E42;"></div>
+                        <div class="ral-box" data-ral="RAL 9005" title="RAL 9005 - Jet Black"
+                            style="background:#0A0A0A;"></div>
+                        <div class="ral-box" data-ral="RAL 9006" title="RAL 9006 - White Aluminium"
+                            style="background:#A5A5A5;"></div>
+                        <div class="ral-box" data-ral="RAL 9010" title="RAL 9010 - Pure White"
+                            style="background:#F4F4F4;"></div>
+
+                        <div class="ral-box" data-ral="RAL 3020" title="RAL 3020 - Traffic Red"
+                            style="background:#C1121C;"></div>
+                        <div class="ral-box" data-ral="RAL 3000" title="RAL 3000 - Flame Red"
+                            style="background:#A51C30;"></div>
+
+                        <div class="ral-box" data-ral="RAL 5015" title="RAL 5015 - Sky Blue"
+                            style="background:#005387;"></div>
+                        <div class="ral-box" data-ral="RAL 5005" title="RAL 5005 - Signal Blue"
+                            style="background:#003E7E;"></div>
+
+                        <div class="ral-box" data-ral="RAL 6024" title="RAL 6024 - Traffic Green"
+                            style="background:#3A7D44;"></div>
+                        <div class="ral-box" data-ral="RAL 6018" title="RAL 6018 - Yellow Green"
+                            style="background:#57A639;"></div>
+
+                        <div class="ral-box" data-ral="RAL 1023" title="RAL 1023 - Traffic Yellow"
+                            style="background:#F7B500;"></div>
+                        <div class="ral-box" data-ral="RAL 1003" title="RAL 1003 - Signal Yellow"
+                            style="background:#F9A602;"></div>
+
+                        <div class="ral-box" data-ral="RAL 2004" title="RAL 2004 - Pure Orange"
+                            style="background:#E35205;"></div>
+
+                        <div class="ral-box" data-ral="RAL 8017" title="RAL 8017 - Chocolate Brown"
+                            style="background:#4B2E2B;"></div>
+
+                        <div class="ral-box" data-ral="RAL 7032" title="RAL 7032 - Pebble Grey"
+                            style="background:#B8B799;"></div>
+                        <div class="ral-box" data-ral="RAL 7030" title="RAL 7030 - Stone Grey"
+                            style="background:#928E85;"></div>
+                        <div class="ral-box" data-ral="RAL 7043" title="RAL 7043 - Traffic Grey B"
+                            style="background:#4E5452;"></div>
+
+                        <div class="ral-box" data-ral="RAL 6005" title="RAL 6005 - Moss Green"
+                            style="background:#0B3D2E;"></div>
+
+                        <div class="ral-box" data-ral="RAL 4005" title="RAL 4005 - Blue Lilac"
+                            style="background:#7666C6;"></div>
+
+                        <div class="ral-box" data-ral="RAL 8004" title="RAL 8004 - Copper Brown"
+                            style="background:#8A3B12;"></div>
+
+                        <div class="ral-box" data-ral="RAL 1015" title="RAL 1015 - Light Ivory"
+                            style="background:#E6D2B5;"></div>
+
+                    </div>
+
+
+                    <div style="margin-bottom:18px; font-size:13px;">
+                        <a href="https://www.ralcolorchart.com/" target="_blank"
+                            style="color:#1e73be; text-decoration:none;">
+                            🎨 View RAL Color Online
+                        </a>
+                        &nbsp; | &nbsp;
+                        <a href="ral-chart.pdf" target="_blank" style="color:#1e73be;">
+                            📥 Download PDF
+                        </a>
+                    </div>
+
+                    <select name="finish_type">
+                        <option value="">Finish Type</option>
+                        <option>Matte</option>
+                        <option>Semi-Gloss</option>
+                        <option>High Gloss</option>
+                    </select>
+
+                    <select name="line_marking">
+                        <option value="">Line Marking Required?</option>
+                        <option>Yes</option>
+                        <option>No</option>
+                    </select>
+
+
+                    <h3 style="color:#1e73be;">🕒 Planning</h3>
+
+                    <input type="date" name="start_date">
+
+                    <select name="urgent">
+                        <option value="">Is Project Urgent?</option>
+                        <option>Yes</option>
+                        <option>No</option>
+                    </select>
+
+                    <select name="working_hours">
+                        <option value="">Working Hours Allowed</option>
+                        <option>24 Hours</option>
+                        <option>Day Shift Only</option>
+                        <option>Night Shift Only</option>
+                        <option>Weekend Only</option>
+                        <option>Not Decided</option>
+                    </select>
+
+                    <div class="btn-group">
+                        <button type="button" class="back-btn" onclick="prevStep()">← Back</button>
+                        <button type="submit">Submit Enquiry</button>
+                    </div>
+
+                </div>
+        </form>
+    </div>
+
+    <div class="popup" id="thankYouPopup">
+        <div class="popup-content">
+            <h3 style="color:#1e73be;">✔ Thank You!</h3>
+            <p>Your enquiry has been submitted successfully.</p>
+            <button onclick="closePopup()">Close</button>
+        </div>
+    </div>
+
+    <div class="loader-overlay" id="loader">
+        <div class="loader"></div>
+    </div>
+
+    <script>
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('sw.js').catch(function (err) {
+                    console.warn('Service worker failed:', err);
+                });
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+
+            const form = document.getElementById("leadForm");
+            const popup = document.getElementById("thankYouPopup");
+            const loader = document.getElementById("loader");
+            const submitBtn = form.querySelector("button");
+
+            const phone = document.getElementById("phone");
+            const phoneError = document.getElementById("phoneError");
+            const phoneValid = document.getElementById("phoneValid");
+
+            const email = document.getElementById("email");
+            const emailError = document.getElementById("emailError");
+            const emailValid = document.getElementById("emailValid");
+
+            /* Only numbers allow */
+            phone.addEventListener("input", function () {
+                this.value = this.value.replace(/\D/g, '').slice(0, 10);
+            });
+
+            /* Phone Blur Validation */
+            phone.addEventListener("blur", function () {
+                validatePhone();
+            });
+
+            /* Email Blur Validation */
+            email.addEventListener("blur", function () {
+                validateEmail();
+            });
+
+            /* Phone Validation Function */
+            function validatePhone() {
+                const value = phone.value.trim();
+                if (!/^[6-9][0-9]{9}$/.test(value)) {
+                    phone.classList.add("error");
+                    phone.classList.remove("valid");
+                    if (phoneError) phoneError.style.display = "block";
+                    if (phoneValid) phoneValid.style.display = "none";
+                    return false;
+                } else {
+                    phone.classList.remove("error");
+                    phone.classList.add("valid");
+                    if (phoneError) phoneError.style.display = "none";
+                    if (phoneValid) phoneValid.style.display = "block";
+                    return true;
+                }
+            }
+
+            /* Email Validation Function */
+            function validateEmail() {
+                const value = email.value.trim();
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+                    email.classList.add("error");
+                    email.classList.remove("valid");
+                    if (emailError) emailError.style.display = "block";
+                    if (emailValid) emailValid.style.display = "none";
+                    return false;
+                } else {
+                    email.classList.remove("error");
+                    email.classList.add("valid");
+                    if (emailError) emailError.style.display = "none";
+                    if (emailValid) emailValid.style.display = "block";
+                    return true;
+                }
+            }
+
+            /* Step 1 Validation Before Next */
+            window.nextStep = function () {
+
+                const step1 = document.getElementById("step1");
+                const inputs = step1.querySelectorAll("input, select, textarea");
+
+                for (let input of inputs) {
+                    if (!input.checkValidity()) {
+                        input.reportValidity();
+                        return;
+                    }
+                }
+
+                if (!validatePhone() || !validateEmail()) {
+                    return;
+                }
+
+                step1.classList.remove("active");
+                document.getElementById("step2").classList.add("active");
+
+                document.getElementById("step1Indicator").classList.remove("active");
+                document.getElementById("step2Indicator").classList.add("active");
+
+                window.scrollTo(0, 0);
+            };
+
+            /* Back Button */
+            window.prevStep = function () {
+                document.getElementById("step2").classList.remove("active");
+                document.getElementById("step1").classList.add("active");
+
+                document.getElementById("step2Indicator").classList.remove("active");
+                document.getElementById("step1Indicator").classList.add("active");
+
+                window.scrollTo(0, 0);
+            };
+
+            /* Final Submit */
+            form.addEventListener("submit", function (e) {
+                e.preventDefault();
+
+                if (!form.checkValidity()) {
+                    form.reportValidity();
+                    return;
+                }
+
+                if (!validatePhone() || !validateEmail()) {
+                    return;
+                }
+
+                loader.style.display = "flex";
+                submitBtn.disabled = true;
+                submitBtn.innerText = "Submitting...";
+
+                fetch("sendmail.php", {
+                    method: "POST",
+                    body: new FormData(form)
+                })
+                    .then(res => res.text())
+                    .then(() => {
+                        loader.style.display = "none";
+                        popup.style.display = "flex";
+                        form.reset();
+                        submitBtn.disabled = false;
+                        submitBtn.innerText = "Submit Enquiry";
+
+                        phone.classList.remove("valid");
+                        email.classList.remove("valid");
+                        if (phoneValid) phoneValid.style.display = "none";
+                        if (emailValid) emailValid.style.display = "none";
+                    })
+                    .catch(() => {
+                        loader.style.display = "none";
+                        alert("Something went wrong!");
+                        submitBtn.disabled = false;
+                        submitBtn.innerText = "Submit Enquiry";
+                    });
+            });
+
+            document.addEventListener("click", function (e) {
+
+                if (e.target.classList.contains("ral-box")) {
+
+                    const allBoxes = document.querySelectorAll(".ral-box");
+                    const colorInput = document.getElementById("preferred_color");
+
+                    // remove previous active
+                    allBoxes.forEach(box => box.classList.remove("active"));
+
+                    // add active to clicked
+                    e.target.classList.add("active");
+
+                    // set value
+                    const ralCode = e.target.getAttribute("data-ral");
+
+                    if (colorInput) {
+                        colorInput.value = ralCode;
+                    }
+
+                }
+
+            });
+
+            /* Activate Step 1 */
+            document.getElementById("step1").classList.add("active");
+
+            window.closePopup = function () {
+                popup.style.display = "none";
+            };
+
+            // Push Notifications
+            async function registerPushNotifications() {
+                if ('serviceWorker' in navigator && 'PushManager' in window && Notification.permission === 'granted') {
+                    try {
+                        const registration = await navigator.serviceWorker.ready;
+                        const subscription = await registration.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: urlBase64ToUint8Array('BMnfna-11JQtWTB7IO_h0g1O_ok3ehuNWgpyNurqzODxWIKAkmwULf_YNdbt0y56_MEH1oOMniR-dra8cFRks1w')
+                        });
+                        const response = await fetch('subscribe.php', {
+                            method: 'POST',
+                            body: JSON.stringify(subscription),
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        const result = await response.json();
+                        if (!response.ok || !result.success) {
+                            console.error('Failed to save push subscription', result);
+                        } else {
+                            console.log('Push notification subscribed', result);
+                        }
+
+                    } catch (error) {
+                        console.error('Push notification registration failed:', error);
+                    }
+                }
+            }
+
+            function updateNotificationBanner() {
+                const notifyBanner = document.getElementById('notifyBanner');
+                const notifyBannerText = document.getElementById('notifyBannerText');
+                const enableNotificationsBtn = document.getElementById('enableNotificationsBtn');
+                if (!notifyBanner || !notifyBannerText || !enableNotificationsBtn) return;
+                if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+                    notifyBanner.style.display = 'none';
+                    return;
+                }
+                if (Notification.permission === 'default') {
+                    notifyBanner.style.display = 'flex';
+                    notifyBannerText.textContent = 'Enable notifications to receive new enquiry and follow-up alerts.';
+                    enableNotificationsBtn.style.display = 'inline-flex';
+                } else if (Notification.permission === 'denied') {
+                    notifyBanner.style.display = 'flex';
+                    notifyBannerText.textContent = 'Notifications are blocked. Enable them in browser settings to receive alerts.';
+                    enableNotificationsBtn.style.display = 'none';
+                } else {
+                    notifyBanner.style.display = 'none';
+                }
+            }
+
+            async function requestNotificationPermission() {
+                const enableNotificationsBtn = document.getElementById('enableNotificationsBtn');
+                if (Notification.permission !== 'default') {
+                    updateNotificationBanner();
+                    return;
+                }
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    await registerPushNotifications();
+                }
+                updateNotificationBanner();
+            }
+
+            const enableNotificationsBtn = document.getElementById('enableNotificationsBtn');
+            if (enableNotificationsBtn) {
+                enableNotificationsBtn.addEventListener('click', requestNotificationPermission);
+            }
+
+            window.addEventListener('load', () => {
+                updateNotificationBanner();
+                if (Notification.permission === 'granted') {
+                    registerPushNotifications();
+                }
+            });
+
+            function urlBase64ToUint8Array(base64String) {
+                const padding = '='.repeat((4 - base64String.length % 4) % 4);
+                const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+                const rawData = window.atob(base64);
+                const outputArray = new Uint8Array(rawData.length);
+                for (let i = 0; i < rawData.length; ++i) {
+                    outputArray[i] = rawData.charCodeAt(i);
+                }
+                return outputArray;
+            }
+
+            // Register push notifications on load
+            registerPushNotifications();
+
+        });
+
+    </script>
+
+</body>
+
+</html>
