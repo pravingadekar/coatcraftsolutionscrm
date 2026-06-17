@@ -233,22 +233,32 @@ function renderTable($rows) {
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 :root{--bg:#f4f7fb;--panel:#ffffff;--primary:#0f4a78;--primary-dark:#0a3153;--accent:#f59e0b;--muted:#475569;--border:#d9e2ea;--brand:#0f4a78;--brand-light:#eef3f9;}
 *{box-sizing:border-box;}
 body{margin:0;font-family:'Poppins',sans-serif;background:var(--bg);color:#1f2937;}
 .crm-shell{display:flex;min-height:100vh;}
-.sidebar{width:280px;background:linear-gradient(180deg, #10365a 0%, #071c34 100%);color:#fff;padding:30px 20px;position:sticky;top:0;align-self:flex-start;height:100vh;}
-.brand{margin-bottom:30px;background:#f5f5f5;padding:24px;border-radius:26px;border:1px solid rgba(255,255,255,.16);box-shadow:0 24px 60px rgba(0,0,0,.16);}
+.sidebar{width:280px;background:linear-gradient(180deg, #10365a 0%, #071c34 100%);color:#fff;padding:24px 18px;position:sticky;top:0;align-self:flex-start;height:100vh;display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:thin;}
+.brand{margin-bottom:24px;background:#f5f5f5;padding:24px;border-radius:26px;border:1px solid rgba(255,255,255,.16);box-shadow:0 24px 60px rgba(0,0,0,.16);}
 .brand-logo{display:block;width:170px;margin-bottom:18px;}
 .brand h1{margin:0;font-size:24px;line-height:1.2;color:#0d1d2d;letter-spacing:.01em;}
 .brand p{color:#d1e7dc;line-height:1.6;margin-top:10px;}
 
-.sidebar nav a{display:block;padding:14px 16px;margin-bottom:10px;border-radius:14px;color:#e2e8f0;text-decoration:none;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);transition:transform .2s ease,background .2s,color .2s,box-shadow .2s;}
-.sidebar nav a.active, .sidebar nav a:hover{background:rgba(255,255,255,.18);color:#fff;box-shadow:0 16px 30px rgba(0,0,0,.14);transform:translateY(-1px);}
-.sidebar .section-title{margin:30px 0 12px;font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#94a3b8;}
-.sidebar .link-button{display:block;padding:14px 16px;margin-top:10px;border-radius:14px;background:linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.1));color:#f3f9f2;text-decoration:none;box-shadow:0 18px 32px rgba(0,0,0,.14);transition:transform .2s ease,box-shadow .2s ease,background .2s;}
-.sidebar .link-button:hover{background:linear-gradient(135deg, rgba(255,255,255,.3), rgba(255,255,255,.15));transform:translateY(-1px);box-shadow:0 22px 40px rgba(0,0,0,.18);}
+.sidebar nav{flex:1;}
+.sidebar nav a{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:6px;border-radius:14px;color:#cbd5e1;text-decoration:none;background:transparent;border:1px solid transparent;font-size:14px;font-weight:500;transition:transform .15s ease,background .15s,color .15s,box-shadow .15s;}
+.sidebar nav a i{width:18px;text-align:center;font-size:14px;color:#7fa8cc;flex-shrink:0;transition:color .15s;}
+.sidebar nav a:hover{background:rgba(255,255,255,.08);color:#fff;}
+.sidebar nav a:hover i{color:#fff;}
+.sidebar nav a.active{background:linear-gradient(135deg, #1e73be, #134d80);color:#fff;box-shadow:0 12px 24px rgba(0,0,0,.25);border-color:rgba(255,255,255,.12);}
+.sidebar nav a.active i{color:#fff;}
+.sidebar .nav-group{margin-bottom:18px;}
+.sidebar .section-title{margin:0 0 10px;padding:0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#5d83a8;font-weight:600;}
+.sidebar .link-button{display:flex;align-items:center;gap:10px;padding:12px 14px;margin-top:8px;border-radius:14px;background:rgba(255,255,255,.06);color:#e7f1ff;text-decoration:none;font-size:14px;font-weight:500;border:1px solid rgba(255,255,255,.1);transition:transform .15s ease,box-shadow .15s ease,background .15s;}
+.sidebar .link-button:hover{background:rgba(255,255,255,.16);transform:translateY(-1px);}
+.sidebar .sidebar-footer{margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.1);}
+.sidebar .logout-link{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;color:#fca5a5;text-decoration:none;font-size:14px;font-weight:500;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.18);transition:background .15s,color .15s;}
+.sidebar .logout-link:hover{background:rgba(248,113,113,.18);color:#fff;}
 .crm-main{flex:1;padding:24px;}
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:24px;}
 .topbar h2{margin:0;font-size:34px;letter-spacing:-.03em;color:#091623;text-shadow:0 4px 18px rgba(15,23,42,.12);}
@@ -319,23 +329,42 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
             <p style="color:#d1e7dc;margin-top:10px;line-height:1.5;"></p>
         </div>
         <nav>
-            <a href="?view=overview" class="<?= $view==='overview' ? 'active' : '' ?>">Overview</a>
-            <a href="?view=all" class="<?= $view==='all' ? 'active' : '' ?>">All Leads</a>
-            <a href="?view=new" class="<?= $view==='new' ? 'active' : '' ?>">New Leads</a>
-            <a href="?view=contacted" class="<?= $view==='contacted' ? 'active' : '' ?>">Contacted</a>
-            <a href="?view=closed" class="<?= $view==='closed' ? 'active' : '' ?>">Closed</a>
-            <a href="?view=industrial" class="<?= $view==='industrial' ? 'active' : '' ?>">Industrial</a>
-            <a href="?view=residential" class="<?= $view==='residential' ? 'active' : '' ?>">Residential</a>
-            <a href="?view=followups" class="<?= $view==='followups' ? 'active' : '' ?>">Follow-ups</a>
-            <a href="?view=notes" class="<?= $view==='notes' ? 'active' : '' ?>">Daily Notes</a>
-            <a href="?view=pipeline" class="<?= $view==='pipeline' ? 'active' : '' ?>">Pipeline</a>
-            <a href="?view=calculator" class="<?= $view==='calculator' ? 'active' : '' ?>">Calculator</a>
+            <div class="nav-group">
+                <a href="?view=overview" class="<?= $view==='overview' ? 'active' : '' ?>"><i class="fa-solid fa-gauge-high"></i>Overview</a>
+            </div>
+
+            <div class="nav-group">
+                <div class="section-title">Leads</div>
+                <a href="?view=all" class="<?= $view==='all' ? 'active' : '' ?>"><i class="fa-solid fa-list"></i>All Leads</a>
+                <a href="?view=new" class="<?= $view==='new' ? 'active' : '' ?>"><i class="fa-solid fa-star"></i>New Leads</a>
+                <a href="?view=contacted" class="<?= $view==='contacted' ? 'active' : '' ?>"><i class="fa-solid fa-phone"></i>Contacted</a>
+                <a href="?view=closed" class="<?= $view==='closed' ? 'active' : '' ?>"><i class="fa-solid fa-circle-check"></i>Closed</a>
+                <a href="?view=industrial" class="<?= $view==='industrial' ? 'active' : '' ?>"><i class="fa-solid fa-industry"></i>Industrial</a>
+                <a href="?view=residential" class="<?= $view==='residential' ? 'active' : '' ?>"><i class="fa-solid fa-house"></i>Residential</a>
+            </div>
+
+            <div class="nav-group">
+                <div class="section-title">Workflow</div>
+                <a href="?view=followups" class="<?= $view==='followups' ? 'active' : '' ?>"><i class="fa-solid fa-bell"></i>Follow-ups</a>
+                <a href="?view=notes" class="<?= $view==='notes' ? 'active' : '' ?>"><i class="fa-solid fa-note-sticky"></i>Daily Notes</a>
+                <a href="?view=pipeline" class="<?= $view==='pipeline' ? 'active' : '' ?>"><i class="fa-solid fa-diagram-project"></i>Pipeline</a>
+            </div>
+
+            <div class="nav-group">
+                <div class="section-title">Tools</div>
+                <a href="?view=calculator" class="<?= $view==='calculator' ? 'active' : '' ?>"><i class="fa-solid fa-calculator"></i>Calculator</a>
+            </div>
         </nav>
-        <div class="section-title">Calculator</div>
-        <a class="link-button" href="?view=calculator">Open Calculator</a>
-        <div class="section-title">Quick Actions</div>
-        <a class="link-button" href="view-leads.php">Open Lead Board</a>
-        <a class="link-button" href="export.php">Export Leads</a>
+
+        <div class="nav-group">
+            <div class="section-title">Quick Actions</div>
+            <a class="link-button" href="view-leads.php"><i class="fa-solid fa-table-list"></i>Open Lead Board</a>
+            <a class="link-button" href="export.php"><i class="fa-solid fa-file-export"></i>Export Leads</a>
+        </div>
+
+        <div class="sidebar-footer">
+            <a class="logout-link" href="logout.php"><i class="fa-solid fa-right-from-bracket"></i>Logout</a>
+        </div>
     </aside>
     <main class="crm-main">
         <button id="installPwaBtn" class="install-btn" type="button">Install App</button>
