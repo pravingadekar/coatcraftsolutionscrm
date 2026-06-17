@@ -316,17 +316,39 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
 .notify-banner.show{display:flex;}
 .notify-btn{background:#0f4a78;color:#fff;border:none;padding:10px 16px;border-radius:14px;cursor:pointer;box-shadow:0 12px 24px rgba(15,74,120,.14);}
 .notify-btn:hover{opacity:.95;}
-@media(max-width:1024px){.crm-shell{flex-direction:column;}.sidebar{width:100%;height:auto;position:relative;}.crm-main{padding:18px;}.stats-grid{grid-template-columns:1fr 1fr;}.kanban-board{grid-template-columns:1fr;}.calculator-grid{grid-template-columns:1fr;}}
+.mobile-topbar{display:none;}
+.sidebar-overlay{display:none;}
+
+@media(max-width:1024px){
+    .crm-shell{flex-direction:column;}
+    .mobile-topbar{display:flex;align-items:center;gap:14px;background:linear-gradient(180deg, #10365a 0%, #071c34 100%);color:#fff;padding:14px 18px;position:sticky;top:0;z-index:50;}
+    .mobile-topbar button{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;width:42px;height:42px;border-radius:12px;font-size:18px;cursor:pointer;flex-shrink:0;}
+    .mobile-topbar img{width:129px;height:40px;background-color:#fff;border-radius:8px;}
+    .mobile-topbar span{font-weight:600;font-size:16px;}
+    .sidebar{position:fixed;top:0;left:0;width:280px;max-width:82vw;height:100vh;z-index:100;transform:translateX(-100%);transition:transform .25s ease;box-shadow:0 0 40px rgba(0,0,0,.3);}
+    .sidebar.open{transform:translateX(0);}
+    .sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90;opacity:0;visibility:hidden;transition:opacity .25s ease;}
+    .sidebar-overlay.show{display:block;opacity:1;visibility:visible;}
+    .crm-main{padding:18px;}
+    .stats-grid{grid-template-columns:1fr 1fr;}
+    .kanban-board{grid-template-columns:1fr;}
+    .calculator-grid{grid-template-columns:1fr;}
+}
 @media(max-width:720px){.stats-grid{grid-template-columns:1fr;}.topbar{flex-direction:column;align-items:flex-start;}.topbar form{width:100%;}.topbar form input{width:100%;}.topbar .action-btn{width:100%;}.cards-grid{grid-template-columns:1fr;}.lead-actions{flex-direction:column;align-items:stretch;gap:12px;}.sidebar nav a{padding:12px 14px;font-size:14px;}.sidebar{padding:20px;}}
 </style>
 </head>
 <body>
+<div class="mobile-topbar">
+    <button id="sidebarToggle" type="button" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
+    <img src="new_logo.png" alt="CoatCraft Solutions">
+    <span></span>
+</div>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="crm-shell">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
         <div class="brand">
             <img src="new_logo.png" class="brand-logo" alt="CoatCraft Solutions">
-            <h1>CoatCraft CRM</h1>
-            <p style="color:#d1e7dc;margin-top:10px;line-height:1.5;"></p>
+           
         </div>
         <nav>
             <div class="nav-group">
@@ -810,6 +832,24 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
     </main>
 </div>
 <script>
+(function() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const toggleBtn = document.getElementById('sidebarToggle');
+
+    function openSidebar() {
+        sidebar.classList.add('open');
+        overlay.classList.add('show');
+    }
+    function closeSidebar() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('show');
+    }
+
+    if (toggleBtn) toggleBtn.addEventListener('click', openSidebar);
+    if (overlay) overlay.addEventListener('click', closeSidebar);
+})();
+
 function calculateCRM() {
     var area = Number(document.getElementById('calc-area').value) || 0;
     var mm = Number(document.getElementById('calc-mm').value);
