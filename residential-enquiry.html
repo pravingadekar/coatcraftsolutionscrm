@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>CoatCraft Solutions - Residential Flooring Enquiry</title>
+
+    <meta property="og:title" content="CoatCraft Solutions - Residential Epoxy Flooring">
+    <meta property="og:description" content="Residential Epoxy Flooring Enquiry | Home & Terrace Services">
+    <meta property="og:image" content="https://workmanager.in/CoatCraftSolutions/epoxy-preview.png">
+    <meta property="og:url" content="https://workmanager.in/CoatCraftSolutions/residential-enquiry.html">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="/new_logo.png">
+    <link rel="apple-touch-icon" href="/new_logo.png">
+    <meta name="theme-color" content="#0f4a78">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            background: linear-gradient(135deg, #1e73be, #0f3057);
+        }
+
+        .container {
+            max-width: 750px;
+            margin: 40px auto;
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+        }
+
+        .brand-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .brand-logo {
+            max-width: 220px;
+            width: 100%;
+            height: auto;
+        }
+
+        .brand-title {
+            font-size: 18px;
+            color: #1e73be;
+            font-weight: 600;
+            margin: 10px 0 5px;
+        }
+
+        .brand-subtitle {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 15px;
+        }
+
+        .trust-badges {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .trust-badges span {
+            background: #f4f7fb;
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid #e0e6ed;
+        }
+
+        h2 {
+            text-align: center;
+            color: #1e73be;
+            margin-bottom: 25px;
+        }
+
+        label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .required {
+            color: red;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 18px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+            box-sizing: border-box;
+            transition: 0.3s;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            border-color: #1e73be;
+            outline: none;
+        }
+
+        button {
+            background: #1e73be;
+            color: #fff;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            width: 100%;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            min-height: 44px;
+        }
+
+        button:hover {
+            background: #155a96;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .valid-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #2ecc71;
+            font-size: 16px;
+            display: none;
+        }
+
+        .error-msg {
+            display: none;
+            color: #e74c3c;
+            font-size: 12px;
+            margin-top: -17px;
+            margin-bottom: 8px;
+        }
+
+        input.error {
+            border-color: #e74c3c;
+        }
+
+        input.valid {
+            border-color: #2ecc71;
+        }
+
+        .checkbox-group {
+            margin-bottom: 18px;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            font-weight: normal;
+            cursor: pointer;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 10px;
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+
+        /* Popup */
+        .popup {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .popup-content {
+            background: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .popup-content button {
+            margin-top: 15px;
+        }
+
+        /* Loader */
+        .loader-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .loader {
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid #1e73be;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ========== MOBILE-FIRST RESPONSIVE DESIGN ========== */
+
+        /* Ultra-Small Screens (320px - 480px) */
+        @media (max-width: 480px) {
+            .container {
+                max-width: 100%;
+                margin: 8px 6px;
+                padding: 10px;
+            }
+
+            .brand-logo {
+                max-width: 100px;
+            }
+
+            .brand-title {
+                font-size: 16px;
+                margin: 8px 0 3px;
+            }
+
+            .brand-subtitle {
+                font-size: 12px;
+                margin-bottom: 10px;
+            }
+
+            .trust-badges {
+                flex-direction: column;
+                align-items: center;
+                gap: 6px;
+            }
+
+            .trust-badges span {
+                display: block;
+                width: auto;
+                margin: 0 auto;
+                font-size: 11px;
+                padding: 5px 10px;
+            }
+
+            h2 {
+                font-size: 18px;
+                margin-bottom: 15px;
+            }
+
+            label {
+                font-size: 12px;
+            }
+
+            input,
+            select,
+            textarea {
+                padding: 10px;
+                margin-bottom: 12px;
+                font-size: 13px;
+            }
+
+            button {
+                padding: 12px;
+                font-size: 14px;
+            }
+
+            .error-msg {
+                font-size: 11px;
+            }
+
+            .popup-content {
+                padding: 20px;
+                margin: 20px;
+            }
+        }
+
+        /* Small Phones (481px - 599px) */
+        @media (min-width: 481px) and (max-width: 599px) {
+            .container {
+                max-width: 100%;
+                margin: 10px 8px;
+                padding: 14px;
+            }
+
+            .brand-logo {
+                max-width: 120px;
+            }
+
+            .brand-title {
+                font-size: 17px;
+            }
+
+            .trust-badges {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .trust-badges span {
+                display: block;
+                width: auto;
+                margin: 0 auto;
+                font-size: 12px;
+            }
+
+            h2 {
+                font-size: 19px;
+            }
+
+            label {
+                font-size: 13px;
+            }
+
+            input,
+            select,
+            textarea {
+                padding: 11px;
+                margin-bottom: 14px;
+                font-size: 13px;
+            }
+        }
+
+        /* Medium Tablets (600px - 767px) */
+        @media (min-width: 600px) and (max-width: 767px) {
+            .container {
+                max-width: 95%;
+                margin: 15px auto;
+                padding: 20px;
+            }
+
+            .brand-logo {
+                max-width: 180px;
+            }
+
+            .brand-title {
+                font-size: 18px;
+            }
+
+            .trust-badges {
+                flex-direction: row;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            h2 {
+                font-size: 21px;
+            }
+
+            input,
+            select,
+            textarea {
+                margin-bottom: 16px;
+            }
+        }
+
+        /* Tablets and Large Phones (768px - 1023px) */
+        @media (min-width: 768px) and (max-width: 1023px) {
+            .container {
+                max-width: 90%;
+                margin: 30px auto;
+                padding: 26px;
+            }
+
+            .brand-logo {
+                max-width: 200px;
+            }
+
+            .brand-title {
+                font-size: 19px;
+            }
+
+            h2 {
+                font-size: 22px;
+            }
+        }
+
+        /* Desktop (1024px and above) */
+        @media (min-width: 1024px) {
+            .container {
+                max-width: 750px;
+                margin: 40px auto;
+                padding: 30px;
+            }
+
+            .brand-logo {
+                max-width: 220px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <div class="brand-header">
+            <img src="https://workmanager.in/CoatCraftSolutions/new_logo.png" class="brand-logo">
+            <div class="brand-title">Residential Flooring Specialists</div>
+            <div class="brand-subtitle">Home | Terrace | Living Spaces</div>
+            <div class="trust-badges">
+                <span><i class="fa-solid fa-circle-check"></i> 200+ Happy Homes</span>
+                <span><i class="fa-solid fa-circle-check"></i> Quality Assured</span>
+                <span><i class="fa-solid fa-circle-check"></i> Maharashtra Service</span>
+            </div>
+        </div>
+
+        <h2>Residential Flooring Enquiry Form</h2>
+
+        <form id="residentialForm">
+
+            <label>Full Name <span class="required">*</span></label>
+            <input type="text" name="name" required>
+
+            <div class="form-group">
+                <label>Phone Number <span class="required">*</span></label>
+                <div class="input-wrapper">
+                    <input type="tel" name="phone" id="phone" maxlength="10" inputmode="numeric" required>
+                    <span class="valid-icon" id="phoneValid"><i class="fa-solid fa-check"></i></span>
+                </div>
+                <div class="error-msg" id="phoneError">
+                    Enter valid 10 digit Indian mobile number (starting with 6-9)
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Email Address <span class="required">*</span></label>
+                <div class="input-wrapper">
+                    <input type="email" name="email" id="email" required>
+                    <span class="valid-icon" id="emailValid"><i class="fa-solid fa-check"></i></span>
+                </div>
+                <div class="error-msg" id="emailError">
+                    Enter valid email address
+                </div>
+            </div>
+
+            <label>Address <span class="required">*</span></label>
+            <textarea name="address" rows="3" required placeholder="Enter your full address"></textarea>
+
+            <label>Total Area <span class="required">*</span></label>
+            <select name="area" required>
+                <option value="">Select Area</option>
+                <option>100 - 500 sqft</option>
+                <option>500 - 1000 sqft</option>
+                <option>1000 - 2000 sqft</option>
+                <option>2000 - 5000 sqft</option>
+                <option>5000+ sqft</option>
+                <option>Not Sure</option>
+            </select>
+
+            <label>Type of Work <span class="required">*</span> (Select all that apply)</label>
+            <div class="checkbox-group">
+                <label><input type="checkbox" name="work_type" value="Living Room"> Living Room</label>
+                <label><input type="checkbox" name="work_type" value="Bedroom"> Bedroom</label>
+                <label><input type="checkbox" name="work_type" value="Kitchen"> Kitchen</label>
+                <label><input type="checkbox" name="work_type" value="Bathroom"> Bathroom</label>
+                <label><input type="checkbox" name="work_type" value="Terrace"> Terrace</label>
+                <label><input type="checkbox" name="work_type" value="Balcony"> Balcony</label>
+                <label><input type="checkbox" name="work_type" value="Garage"> Garage</label>
+                <label><input type="checkbox" name="work_type" value="Full House"> Full House</label>
+            </div>
+
+            <label>Budget Range (Optional)</label>
+            <select name="budget">
+                <option value="">Select Budget</option>
+                <option>₹10,000 - ₹50,000</option>
+                <option>₹50,000 - ₹1,00,000</option>
+                <option>₹1,00,000 - ₹5,00,000</option>
+                <option>₹5,00,000+</option>
+                <option>Not Decided</option>
+            </select>
+
+            <label>Additional Notes (Optional)</label>
+            <textarea name="message" rows="4" placeholder="Any specific requirements or questions..."></textarea>
+
+            <button type="submit">Submit Enquiry</button>
+
+        </form>
+    </div>
+
+    <div class="popup" id="thankYouPopup">
+        <div class="popup-content">
+            <h3 style="color:#1e73be;">✔ Thank You!</h3>
+            <p>Your enquiry has been submitted successfully. We'll contact you soon!</p>
+            <button onclick="closePopup()">Close</button>
+        </div>
+    </div>
+
+    <div class="loader-overlay" id="loader">
+        <div class="loader"></div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+
+            const form = document.getElementById("residentialForm");
+            const popup = document.getElementById("thankYouPopup");
+            const loader = document.getElementById("loader");
+            const submitBtn = form.querySelector("button");
+
+            const phone = document.getElementById("phone");
+            const phoneError = document.getElementById("phoneError");
+            const phoneValid = document.getElementById("phoneValid");
+
+            const email = document.getElementById("email");
+            const emailError = document.getElementById("emailError");
+            const emailValid = document.getElementById("emailValid");
+
+            /* Only numbers allow */
+            phone.addEventListener("input", function () {
+                this.value = this.value.replace(/\D/g, '').slice(0, 10);
+            });
+
+            /* Phone Blur Validation */
+            phone.addEventListener("blur", function () {
+                validatePhone();
+            });
+
+            /* Email Blur Validation */
+            email.addEventListener("blur", function () {
+                validateEmail();
+            });
+
+            /* Phone Validation Function */
+            function validatePhone() {
+                const value = phone.value.trim();
+                if (!/^[6-9][0-9]{9}$/.test(value)) {
+                    phone.classList.add("error");
+                    phone.classList.remove("valid");
+                    if (phoneError) phoneError.style.display = "block";
+                    if (phoneValid) phoneValid.style.display = "none";
+                    return false;
+                } else {
+                    phone.classList.remove("error");
+                    phone.classList.add("valid");
+                    if (phoneError) phoneError.style.display = "none";
+                    if (phoneValid) phoneValid.style.display = "block";
+                    return true;
+                }
+            }
+
+            /* Email Validation Function */
+            function validateEmail() {
+                const value = email.value.trim();
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+                    email.classList.add("error");
+                    email.classList.remove("valid");
+                    if (emailError) emailError.style.display = "block";
+                    if (emailValid) emailValid.style.display = "none";
+                    return false;
+                } else {
+                    email.classList.remove("error");
+                    email.classList.add("valid");
+                    if (emailError) emailError.style.display = "none";
+                    if (emailValid) emailValid.style.display = "block";
+                    return true;
+                }
+            }
+
+            /* Validate at least one checkbox is selected */
+            function validateWorkType() {
+                const checkboxes = document.querySelectorAll('input[name="work_type"]');
+                const isChecked = Array.from(checkboxes).some(cb => cb.checked);
+                if (!isChecked) {
+                    alert('Please select at least one type of work');
+                    return false;
+                }
+                return true;
+            }
+
+            /* Get selected checkboxes as comma-separated string */
+            function getSelectedWorkTypes() {
+                const checkboxes = document.querySelectorAll('input[name="work_type"]:checked');
+                return Array.from(checkboxes).map(cb => cb.value).join(', ');
+            }
+
+            /* Final Submit */
+            form.addEventListener("submit", function (e) {
+                e.preventDefault();
+
+                if (!form.checkValidity()) {
+                    form.reportValidity();
+                    return;
+                }
+
+                if (!validatePhone() || !validateEmail()) {
+                    return;
+                }
+
+                if (!validateWorkType()) {
+                    return;
+                }
+
+                loader.style.display = "flex";
+                submitBtn.disabled = true;
+                submitBtn.innerText = "Submitting...";
+
+                // Prepare form data
+                const formData = new FormData(form);
+                formData.set('work_type', getSelectedWorkTypes());
+
+                fetch("sendmail.php", {
+                    method: "POST",
+                    body: formData
+                })
+                    .then(res => res.json())
+                    .then((data) => {
+                        loader.style.display = "none";
+                        if (data.success) {
+                            popup.style.display = "flex";
+                            form.reset();
+                            submitBtn.disabled = false;
+                            submitBtn.innerText = "Submit Enquiry";
+
+                            phone.classList.remove("valid");
+                            email.classList.remove("valid");
+                            if (phoneValid) phoneValid.style.display = "none";
+                            if (emailValid) emailValid.style.display = "none";
+                        } else {
+                            alert("Error: " + (data.message || "Something went wrong"));
+                            submitBtn.disabled = false;
+                            submitBtn.innerText = "Submit Enquiry";
+                        }
+                    })
+                    .catch((error) => {
+                        loader.style.display = "none";
+                        console.error(error);
+                        alert("Something went wrong!");
+                        submitBtn.disabled = false;
+                        submitBtn.innerText = "Submit Enquiry";
+                    });
+            });
+
+            window.closePopup = function () {
+                popup.style.display = "none";
+            };
+
+        });
+    </script>
+
+</body>
+
+</html>

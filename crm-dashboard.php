@@ -1,11 +1,86 @@
 <?php
+require_once 'auth.php';
+require_login();
 require 'db.php';
 
 $view = $_GET['view'] ?? 'overview';
 $search = trim($_GET['search'] ?? '');
-$where = '';
-if ($search !== '') {
-    $where = "WHERE name LIKE '%" . $conn->real_escape_string($search) . "%' OR phone LIKE '%" . $conn->real_escape_string($search) . "%' OR location LIKE '%" . $conn->real_escape_string($search) . "%'";
+
+$areaRanges = [
+    '100-500' => [100, 500],
+    '500-1000' => [500, 1000],
+    '1000-1500' => [1000, 1500],
+    '1500-2000' => [1500, 2000],
+    '2000-2500' => [2000, 2500],
+    '2500-3000' => [2500, 3000],
+    '3000+' => [3000, null],
+];
+$areaRange = $_GET['area_range'] ?? '';
+$areaMin = $areaMax = null;
+if (isset($areaRanges[$areaRange])) {
+    [$areaMin, $areaMax] = $areaRanges[$areaRange];
+}
+
+function fetchLeads($conn, $baseQuery, $statusFilter, $typeFilter, $search, $areaMin, $areaMax) {
+    $conditions = [];
+    $params = [];
+    $types = '';
+    if ($statusFilter !== null) {
+        $conditions[] = "e.status = ?";
+        $params[] = $statusFilter;
+        $types .= 's';
+    }
+    if ($typeFilter !== null) {
+        $conditions[] = "e.type = ?";
+        $params[] = $typeFilter;
+        $types .= 's';
+    }
+    if ($search !== '') {
+        $conditions[] = "(e.name LIKE CONCAT('%', ?, '%') OR e.phone LIKE CONCAT('%', ?, '%') OR e.location LIKE CONCAT('%', ?, '%'))";
+        $params[] = $search;
+        $params[] = $search;
+        $params[] = $search;
+        $types .= 'sss';
+    }
+    if ($areaMin !== null) {
+        $conditions[] = "CAST(e.area AS UNSIGNED) >= ?";
+        $params[] = $areaMin;
+        $types .= 'i';
+    }
+    if ($areaMax !== null) {
+        $conditions[] = "CAST(e.area AS UNSIGNED) <= ?";
+        $params[] = $areaMax;
+        $types .= 'i';
+    }
+
+    $sql = $baseQuery;
+    if (!empty($conditions)) {
+        $sql .= " WHERE " . implode(' AND ', $conditions);
+    }
+    $sql .= " ORDER BY e.id DESC";
+
+    if (!empty($params)) {
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
+    return $conn->query($sql)->fetch_all(MYSQLI_ASSOC);
+}
+
+function phoneActions($phone) {
+    $digits = preg_replace('/\D/', '', $phone);
+    if (strlen($digits) === 10) {
+        $digits = '91' . $digits;
+    }
+    $safePhone = htmlspecialchars($phone);
+    $waDigits = htmlspecialchars($digits);
+    return '<div style="display:flex;flex-direction:column;gap:6px;">'
+        . '<span>' . $safePhone . '</span>'
+        . '<div style="display:flex;gap:6px;">'
+        . '<a href="tel:+' . $waDigits . '" style="padding:4px 9px;border-radius:8px;background:#0f4a78;color:#fff;font-size:11px;text-decoration:none;">📞 Call</a>'
+        . '<a href="https://wa.me/' . $waDigits . '" target="_blank" rel="noopener" style="padding:4px 9px;border-radius:8px;background:#25D366;color:#fff;font-size:11px;text-decoration:none;">💬 WhatsApp</a>'
+        . '</div></div>';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -35,7 +110,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['update_status'])) {
         $id = intval($_POST['id']);
         $status = $_POST['status'];
-        $conn->query("UPDATE enquiries SET status='$status' WHERE id=$id");
+        $stmt = $conn->prepare("UPDATE enquiries SET status=? WHERE id=?");
+        $stmt->bind_param("si", $status, $id);
+        $stmt->execute();
+        $stmt->close();
     }}
 $total = $conn->query("SELECT COUNT(*) as count FROM enquiries")->fetch_assoc()['count'];
 $newCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='New'")->fetch_assoc()['c'];
@@ -43,16 +121,20 @@ $contactedCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status
 $closedCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='Closed'")->fetch_assoc()['c'];
 $notInterestedCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='Not Interested'")->fetch_assoc()['c'];
 $workDoneCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='Work Done'")->fetch_assoc()['c'];
+$industrialCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE type='commercial'")->fetch_assoc()['c'];
+$residentialCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE type='residential'")->fetch_assoc()['c'];
 $weeklyCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['c'];
 $openFollowupCount = $conn->query("SELECT COUNT(*) as c FROM enquiry_followups WHERE status='Open'")->fetch_assoc()['c'];
 $overdueCount = $conn->query("SELECT COUNT(*) as c FROM enquiry_followups WHERE status='Open' AND due_date < CURDATE() AND due_date IS NOT NULL")->fetch_assoc()['c'];
 $dueSoonCount = $conn->query("SELECT COUNT(*) as c FROM enquiry_followups WHERE status='Open' AND due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)")->fetch_assoc()['c'];
 
 $baseQuery = "SELECT e.*, (SELECT note FROM enquiry_updates u WHERE u.enquiry_id=e.id ORDER BY created_at DESC LIMIT 1) AS last_update, (SELECT created_at FROM enquiry_updates u WHERE u.enquiry_id=e.id ORDER BY created_at DESC LIMIT 1) AS last_update_at FROM enquiries e";
-$allLeads = $conn->query($baseQuery . " $where ORDER BY e.id DESC")->fetch_all(MYSQLI_ASSOC);
-$newLeads = $conn->query($baseQuery . " WHERE e.status='New' " . ($search ? "AND (e.name LIKE '%" . $conn->real_escape_string($search) . "%' OR e.phone LIKE '%" . $conn->real_escape_string($search) . "%' OR e.location LIKE '%" . $conn->real_escape_string($search) . "%')" : "") . " ORDER BY e.id DESC")->fetch_all(MYSQLI_ASSOC);
-$contactedLeads = $conn->query($baseQuery . " WHERE e.status='Contacted' " . ($search ? "AND (e.name LIKE '%" . $conn->real_escape_string($search) . "%' OR e.phone LIKE '%" . $conn->real_escape_string($search) . "%' OR e.location LIKE '%" . $conn->real_escape_string($search) . "%')" : "") . " ORDER BY e.id DESC")->fetch_all(MYSQLI_ASSOC);
-$closedLeads = $conn->query($baseQuery . " WHERE e.status='Closed' " . ($search ? "AND (e.name LIKE '%" . $conn->real_escape_string($search) . "%' OR e.phone LIKE '%" . $conn->real_escape_string($search) . "%' OR e.location LIKE '%" . $conn->real_escape_string($search) . "%')" : "") . " ORDER BY e.id DESC")->fetch_all(MYSQLI_ASSOC);
+$allLeads = fetchLeads($conn, $baseQuery, null, null, $search, $areaMin, $areaMax);
+$newLeads = fetchLeads($conn, $baseQuery, 'New', null, $search, $areaMin, $areaMax);
+$contactedLeads = fetchLeads($conn, $baseQuery, 'Contacted', null, $search, $areaMin, $areaMax);
+$closedLeads = fetchLeads($conn, $baseQuery, 'Closed', null, $search, $areaMin, $areaMax);
+$industrialLeads = fetchLeads($conn, $baseQuery, null, 'commercial', $search, $areaMin, $areaMax);
+$residentialLeads = fetchLeads($conn, $baseQuery, null, 'residential', $search, $areaMin, $areaMax);
 $recentUpdates = $conn->query("SELECT u.note, u.created_at, e.name, e.status FROM enquiry_updates u JOIN enquiries e ON u.enquiry_id=e.id ORDER BY u.created_at DESC LIMIT 8")->fetch_all(MYSQLI_ASSOC);
 $followupTasks = $conn->query("SELECT f.*, e.name, e.phone, e.location, e.status FROM enquiry_followups f JOIN enquiries e ON e.id=f.enquiry_id ORDER BY f.status ASC, f.due_date IS NULL, f.due_date ASC, f.created_at DESC")->fetch_all(MYSQLI_ASSOC);
 $dailyNotes = $conn->query("SELECT * FROM daily_notes ORDER BY created_at DESC LIMIT 12")->fetch_all(MYSQLI_ASSOC);
@@ -70,9 +152,15 @@ $leadDetails = null;
 $leadUpdates = [];
 if ($view === 'lead' && isset($_GET['id'])) {
     $leadId = intval($_GET['id']);
-    $leadDetails = $conn->query("SELECT * FROM enquiries WHERE id=$leadId")->fetch_assoc();
+    $stmt = $conn->prepare("SELECT * FROM enquiries WHERE id=?");
+    $stmt->bind_param("i", $leadId);
+    $stmt->execute();
+    $leadDetails = $stmt->get_result()->fetch_assoc();
     if ($leadDetails) {
-        $leadUpdates = $conn->query("SELECT * FROM enquiry_updates WHERE enquiry_id=$leadId ORDER BY created_at DESC")->fetch_all(MYSQLI_ASSOC);
+        $stmt = $conn->prepare("SELECT * FROM enquiry_updates WHERE enquiry_id=? ORDER BY created_at DESC");
+        $stmt->bind_param("i", $leadId);
+        $stmt->execute();
+        $leadUpdates = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
 }
 
@@ -98,7 +186,7 @@ function renderTable($rows) {
         $html .= '<tr>';
         $html .= '<td>' . intval($row['id']) . '</td>';
         $html .= '<td><a href="?view=lead&id=' . intval($row['id']) . '" style="color:#0f4a78;text-decoration:none;font-weight:500;">' . htmlspecialchars($row['name']) . '</a></td>';
-        $html .= '<td>' . htmlspecialchars($row['phone']) . '</td>';
+        $html .= '<td>' . phoneActions($row['phone']) . '</td>';
         $html .= '<td>' . htmlspecialchars($row['location']) . '</td>';
         $html .= '<td>' . date('d M Y', strtotime($row['created_at'])) . '</td>';
         $html .= '<td>';
@@ -225,6 +313,8 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
             <a href="?view=new" class="<?= $view==='new' ? 'active' : '' ?>">New Leads</a>
             <a href="?view=contacted" class="<?= $view==='contacted' ? 'active' : '' ?>">Contacted</a>
             <a href="?view=closed" class="<?= $view==='closed' ? 'active' : '' ?>">Closed</a>
+            <a href="?view=industrial" class="<?= $view==='industrial' ? 'active' : '' ?>">Industrial</a>
+            <a href="?view=residential" class="<?= $view==='residential' ? 'active' : '' ?>">Residential</a>
             <a href="?view=followups" class="<?= $view==='followups' ? 'active' : '' ?>">Follow-ups</a>
             <a href="?view=notes" class="<?= $view==='notes' ? 'active' : '' ?>">Daily Notes</a>
             <a href="?view=pipeline" class="<?= $view==='pipeline' ? 'active' : '' ?>">Pipeline</a>
@@ -258,6 +348,8 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                 <div class="stat-card"><h3><?= $closedCount ?></h3><p>Closed</p></div>
                 <div class="stat-card"><h3><?= $notInterestedCount ?></h3><p>Not Interested</p></div>
                 <div class="stat-card"><h3><?= $workDoneCount ?></h3><p>Work Done</p></div>
+                <div class="stat-card"><h3><?= $industrialCount ?></h3><p>Industrial</p></div>
+                <div class="stat-card"><h3><?= $residentialCount ?></h3><p>Residential</p></div>
             </div>
         </div>
 
@@ -629,13 +721,19 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
             </div>
         <?php endif; ?>
 
-        <?php if (in_array($view, ['overview','all','new','contacted','closed'])): ?>
+        <?php if (in_array($view, ['overview','all','new','contacted','closed','industrial','residential'])): ?>
             <div class="panel" style="margin-bottom:0;">
                 <div class="topbar" style="padding:0;">
                     <div><h3 class="section-title-2"><?= $view === 'overview' ? 'All Leads' : ucfirst($view) . ' Leads' ?></h3></div>
                     <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
                         <input type="hidden" name="view" value="<?= htmlspecialchars($view) ?>">
                         <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="Search name, phone, location" style="padding:12px;border-radius:14px;border:1px solid #d1d5db;width:240px;">
+                        <select name="area_range" style="padding:12px;border-radius:14px;border:1px solid #d1d5db;">
+                            <option value="">All Areas</option>
+                            <?php foreach ($areaRanges as $key => $range): ?>
+                                <option value="<?= htmlspecialchars($key) ?>" <?= $areaRange === $key ? 'selected' : '' ?>><?= $key === '3000+' ? '3000+ sqft' : $range[0] . ' - ' . $range[1] . ' sqft' ?></option>
+                            <?php endforeach; ?>
+                        </select>
                         <button type="submit" style="padding:12px 18px;border-radius:14px;border:none;background:var(--primary);color:#fff;cursor:pointer;">Search</button>
                     </form>
                 </div>
@@ -659,6 +757,8 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                                 case 'new': echo renderTable($newLeads); break;
                                 case 'contacted': echo renderTable($contactedLeads); break;
                                 case 'closed': echo renderTable($closedLeads); break;
+                                case 'industrial': echo renderTable($industrialLeads); break;
+                                case 'residential': echo renderTable($residentialLeads); break;
                                 default: echo renderTable($allLeads); break;
                             }
                             ?>

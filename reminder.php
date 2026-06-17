@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/auth.php';
+require_login();
 require 'db.php';
 require __DIR__ . '/vendor/autoload.php';
 require __DIR__ . '/push-config.php';

@@ -308,27 +308,413 @@
             }
         }
 
-        @media(max-width:800px) {
+        /* ========== MOBILE-FIRST RESPONSIVE DESIGN ========== */
+
+        /* Ultra-Small Screens (320px - 480px) */
+        @media (max-width: 480px) {
+            body {
+                font-size: 14px;
+            }
+
             .container {
-                margin: 20px 16px;
-                padding: 24px;
+                max-width: 100%;
+                margin: 8px 6px;
+                padding: 10px;
+                border-radius: 8px;
+            }
+
+            .brand-logo {
+                max-width: 100px;
+                height: auto;
+            }
+
+            .brand-title {
+                font-size: 16px;
+                margin: 8px 0 3px;
+            }
+
+            .brand-subtitle {
+                font-size: 12px;
+                margin-bottom: 10px;
             }
 
             .trust-badges {
                 flex-direction: column;
                 align-items: center;
+                gap: 6px;
             }
 
             .trust-badges span {
-                width: 100%;
+                display: block;
+                width: auto;
+                margin: 0 auto;
                 text-align: center;
+                font-size: 11px;
+                padding: 5px 10px;
+            }
+
+            h2 {
+                font-size: 18px;
+                margin-bottom: 15px;
+            }
+
+            h3 {
+                font-size: 13px;
+                margin-bottom: 12px;
+            }
+
+            label {
+                font-size: 12px;
+            }
+
+            input,
+            select,
+            textarea {
+                padding: 10px;
+                margin-top: 5px;
+                margin-bottom: 12px;
+                font-size: 13px;
+            }
+
+            button {
+                padding: 12px;
+                font-size: 14px;
+                min-height: 44px;
+            }
+
+            .step-indicator {
+                flex-direction: column;
+                gap: 0;
+                margin-bottom: 15px;
+            }
+
+            .step {
+                padding: 6px 4px;
+                font-size: 11px;
+                border-bottom: 2px solid #ccc;
+            }
+
+            .ral-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 8px;
+                margin-top: -5px;
+            }
+
+            .ral-box {
+                height: 35px;
+            }
+
+            .ral-link {
+                font-size: 12px;
+            }
+
+            .next-btn,
+            .back-btn {
+                padding: 11px;
+                font-size: 14px;
+                min-height: 44px;
+            }
+
+            .back-btn {
+                margin-bottom: 8px;
+            }
+
+            .popup-content {
+                padding: 20px;
+                margin: 20px;
+            }
+
+            .error-msg {
+                font-size: 11px;
+            }
+
+            #notifyBanner {
+                flex-direction: column;
+                gap: 8px;
+                padding: 12px;
+            }
+
+            #enableNotificationsBtn {
+                width: 100%;
             }
         }
 
-        @media(max-width:600px) {
+        /* Small Phones (481px - 599px) */
+        @media (min-width: 481px) and (max-width: 599px) {
             .container {
-                margin: 15px;
-                padding: 18px;
+                max-width: 100%;
+                margin: 10px 8px;
+                padding: 14px;
+            }
+
+            .brand-logo {
+                max-width: 120px;
+                height: auto;
+            }
+
+            .brand-title {
+                font-size: 17px;
+            }
+
+            .brand-subtitle {
+                font-size: 12px;
+            }
+
+            .trust-badges {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .trust-badges span {
+                display: block;
+                width: auto;
+                margin: 0 auto;
+                text-align: center;
+                font-size: 12px;
+            }
+
+            h2 {
+                font-size: 19px;
+            }
+
+            h3 {
+                font-size: 14px;
+            }
+
+            label {
+                font-size: 13px;
+            }
+
+            input,
+            select,
+            textarea {
+                padding: 11px;
+                font-size: 13px;
+                margin-bottom: 14px;
+            }
+
+            .ral-grid {
+                grid-template-columns: repeat(5, 1fr);
+                gap: 9px;
+            }
+
+            .ral-box {
+                height: 37px;
+            }
+
+            button {
+                min-height: 44px;
+                padding: 12px;
+            }
+
+            .step-indicator {
+                margin-bottom: 18px;
+            }
+
+            .step {
+                font-size: 12px;
+                padding: 6px;
+            }
+        }
+
+        /* Medium Tablets (600px - 767px) */
+        @media (min-width: 600px) and (max-width: 767px) {
+            .container {
+                max-width: 95%;
+                margin: 15px auto;
+                padding: 20px;
+            }
+
+            .brand-logo {
+                max-width: 180px;
+            }
+
+            .brand-title {
+                font-size: 18px;
+            }
+
+            .trust-badges {
+                flex-direction: row;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .trust-badges span {
+                display: contents;
+                font-size: 12px;
+                text-align: center;
+            }
+
+            h2 {
+                font-size: 21px;
+            }
+
+            h3 {
+                font-size: 15px;
+            }
+
+            .ral-grid {
+                grid-template-columns: repeat(6, 1fr);
+                gap: 10px;
+            }
+
+            .ral-box {
+                height: 38px;
+            }
+
+            button {
+                min-height: 44px;
+            }
+
+            input,
+            select,
+            textarea {
+                margin-bottom: 16px;
+            }
+        }
+
+        /* Tablets and Large Phones (768px - 1023px) */
+        @media (min-width: 768px) and (max-width: 1023px) {
+            .container {
+                max-width: 90%;
+                margin: 30px auto;
+                padding: 26px;
+            }
+
+            .brand-logo {
+                max-width: 200px;
+            }
+
+            .brand-title {
+                font-size: 19px;
+            }
+
+            .trust-badges {
+                flex-direction: row;
+                gap: 15px;
+            }
+
+            .trust-badges span {
+                font-size: 13px;
+                padding: 7px 14px;
+            }
+
+            h2 {
+                font-size: 22px;
+            }
+
+            h3 {
+                font-size: 16px;
+            }
+
+            label {
+                font-size: 14px;
+            }
+
+            input,
+            select,
+            textarea {
+                padding: 12px;
+                font-size: 14px;
+                margin-bottom: 16px;
+            }
+
+            button {
+                padding: 13px;
+                min-height: 44px;
+            }
+
+            .ral-grid {
+                grid-template-columns: repeat(7, 1fr);
+                gap: 11px;
+            }
+
+            .ral-box {
+                height: 40px;
+            }
+
+            .step-indicator {
+                margin-bottom: 22px;
+            }
+
+            .step {
+                font-size: 13px;
+                padding: 8px;
+            }
+        }
+
+        /* Desktop (1024px and above) */
+        @media (min-width: 1024px) {
+            .container {
+                max-width: 750px;
+                margin: 40px auto;
+                padding: 30px;
+            }
+
+            .brand-logo {
+                max-width: 220px;
+            }
+
+            .brand-title {
+                font-size: 18px;
+            }
+
+            .trust-badges {
+                flex-direction: row;
+                gap: 10px;
+            }
+
+            .trust-badges span {
+                font-size: 12px;
+                padding: 6px 12px;
+            }
+
+            h2 {
+                font-size: 22px;
+            }
+
+            h3 {
+                font-size: 16px;
+            }
+
+            label {
+                font-size: 14px;
+            }
+
+            input,
+            select,
+            textarea {
+                padding: 12px;
+                font-size: 14px;
+                margin-bottom: 18px;
+            }
+
+            button {
+                padding: 14px;
+                min-height: auto;
+            }
+
+            .ral-grid {
+                grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+                gap: 10px;
+            }
+
+            .ral-box {
+                height: 40px;
+            }
+
+            .ral-box:hover {
+                transform: scale(1.1);
+                border-color: #1e73be;
+            }
+
+            .step-indicator {
+                margin-bottom: 20px;
+            }
+
+            .step {
+                font-size: 13px;
+                padding: 8px;
             }
         }
     </style>
@@ -862,21 +1248,28 @@
                     method: "POST",
                     body: new FormData(form)
                 })
-                    .then(res => res.text())
-                    .then(() => {
+                    .then(res => res.json())
+                    .then((data) => {
                         loader.style.display = "none";
-                        popup.style.display = "flex";
-                        form.reset();
-                        submitBtn.disabled = false;
-                        submitBtn.innerText = "Submit Enquiry";
+                        if (data.success) {
+                            popup.style.display = "flex";
+                            form.reset();
+                            submitBtn.disabled = false;
+                            submitBtn.innerText = "Submit Enquiry";
 
-                        phone.classList.remove("valid");
-                        email.classList.remove("valid");
-                        if (phoneValid) phoneValid.style.display = "none";
-                        if (emailValid) emailValid.style.display = "none";
+                            phone.classList.remove("valid");
+                            email.classList.remove("valid");
+                            if (phoneValid) phoneValid.style.display = "none";
+                            if (emailValid) emailValid.style.display = "none";
+                        } else {
+                            alert("Error: " + (data.message || "Something went wrong"));
+                            submitBtn.disabled = false;
+                            submitBtn.innerText = "Submit Enquiry";
+                        }
                     })
-                    .catch(() => {
+                    .catch((error) => {
                         loader.style.display = "none";
+                        console.error(error);
                         alert("Something went wrong!");
                         submitBtn.disabled = false;
                         submitBtn.innerText = "Submit Enquiry";

@@ -1,4 +1,6 @@
 <?php
+require_once 'auth.php';
+require_login();
 require 'db.php';
 
 /* Add Client Update Note */
@@ -15,28 +17,43 @@ if(isset($_POST['add_update'])){
 
 /* Update Status */
 if(isset($_POST['update_status'])){
-    $id = $_POST['id'];
+    $id = intval($_POST['id']);
     $status = $_POST['status'];
-    $conn->query("UPDATE enquiries SET status='$status' WHERE id=$id");
+    $stmt = $conn->prepare("UPDATE enquiries SET status=? WHERE id=?");
+    $stmt->bind_param("si", $status, $id);
+    $stmt->execute();
+    $stmt->close();
 }
 
 /* Delete */
 if(isset($_GET['delete'])){
-    $id = $_GET['delete'];
-    $conn->query("DELETE FROM enquiries WHERE id=$id");
+    $id = intval($_GET['delete']);
+    $stmt = $conn->prepare("DELETE FROM enquiries WHERE id=?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $stmt->close();
 }
 
 /* Search */
 $where = "";
+$search = "";
 if(isset($_GET['search'])){
     $search = $_GET['search'];
-    $where = "WHERE name LIKE '%$search%' OR phone LIKE '%$search%' OR location LIKE '%$search%'";
+    $where = "WHERE name LIKE CONCAT('%', ?, '%') OR phone LIKE CONCAT('%', ?, '%') OR location LIKE CONCAT('%', ?, '%')";
 }
 
-$result = $conn->query("SELECT e.*, 
+$sql = "SELECT e.*,
     (SELECT note FROM enquiry_updates u WHERE u.enquiry_id=e.id ORDER BY created_at DESC LIMIT 1) AS last_update,
     (SELECT created_at FROM enquiry_updates u WHERE u.enquiry_id=e.id ORDER BY created_at DESC LIMIT 1) AS last_update_at
-    FROM enquiries e $where ORDER BY e.id DESC");
+    FROM enquiries e $where ORDER BY e.id DESC";
+if ($where !== "") {
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("sss", $search, $search, $search);
+    $stmt->execute();
+    $result = $stmt->get_result();
+} else {
+    $result = $conn->query($sql);
+}
 $total = $conn->query("SELECT COUNT(*) as count FROM enquiries")->fetch_assoc()['count'];
 
 $newCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='New'")->fetch_assoc()['c'];
@@ -432,17 +449,25 @@ button{
             <small>#<?= $row['id'] ?> | <?= $row['location'] ?> || 
             <?= date('d M Y', strtotime($row['created_at'])) ?></small>
         </div>
-        <span class="badge"><?= $row['status'] ?></span>
-        
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span class="badge" style="background:<?= $row['type'] === 'residential' ? '#e8f5e9' : '#e3f2fd' ?>;color:<?= $row['type'] === 'residential' ? '#2e7d32' : '#1565c0' ?>;"><?= ucfirst($row['type']) ?></span>
+            <span class="badge"><?= $row['status'] ?></span>
+        </div>
     </div>
 
     <div class="lead-body">
         <p><strong>📞</strong> <?= $row['phone'] ?></p>
         <p><strong>📧</strong> <?= $row['email'] ?></p>
-        <p><strong>📐 Area:</strong> <?= $row['area'] ?></p>
-        <p><strong>🏭 Usage:</strong> <?= $row['industry_usage'] ?></p>
-        <p><strong>🧪 Epoxy Type:</strong> <?= $row['epoxy_type'] ?></p>
-    <p><strong>📏 Thickness:</strong> <?= $row['thickness'] ?></p>
+        <?php if($row['type'] === 'residential'): ?>
+            <p><strong>📍 Address:</strong> <?= $row['address'] ?></p>
+            <p><strong>🔨 Work Type:</strong> <?= str_replace(',', ', ', $row['work_type']) ?></p>
+            <?php if($row['budget']): ?><p><strong>💰 Budget:</strong> <?= $row['budget'] ?></p><?php endif; ?>
+        <?php else: ?>
+            <p><strong>📐 Area:</strong> <?= $row['area'] ?></p>
+            <p><strong>🏭 Usage:</strong> <?= $row['industry_usage'] ?></p>
+            <p><strong>🧪 Epoxy Type:</strong> <?= $row['epoxy_type'] ?></p>
+            <p><strong>📏 Thickness:</strong> <?= $row['thickness'] ?></p>
+        <?php endif; ?>
         <p><strong>⏳ Timeline:</strong> <?= $row['timeline'] ?></p>
         <p><strong>📝 Latest Update:</strong> <?= $row['last_update'] ? htmlspecialchars($row['last_update']) : 'No updates yet' ?></p>
         <?php if($row['last_update_at']): ?>
@@ -497,7 +522,21 @@ button{
         <h3>📋 Project Overview</h3>
         <div class="grid-2">
             <p><strong>Email:</strong> <?= $row['email'] ?></p>
-            <p><strong>Area:</strong> <?= $row['area'] ?></p>
+            <?php if($row['type'] === 'residential'): ?>
+                <p><strong>Address:</strong> <?= $row['address'] ?></p>
+                <p><strong>Work Type:</strong> <?= str_replace(',', ', ', $row['work_type']) ?></p>
+                <?php if($row['budget']): ?><p><strong>Budget:</strong> <?= $row['budget'] ?></p><?php endif; ?>
+            <?php else: ?>
+                <p><strong>Area:</strong> <?= $row['area'] ?></p>
+                <p><strong>Location:</strong> <?= $row['location'] ?></p>
+                <p><strong>Slab Type:</strong> <?= $row['slab'] ?></p>
+            <?php endif; ?>
+            <p><strong>Industry Usage:</strong> <?= $row['industry_usage'] ?></p>
+            <p><strong>Timeline:</strong> <?= $row['timeline'] ?></p>
+            <p><strong>Start Date:</strong> <?= $row['start_date'] ?></p>
+            <p><strong>Urgent:</strong> <?= $row['urgent'] ?></p>
+        </div>
+    </div>
             <p><strong>Industry Usage:</strong> <?= $row['industry_usage'] ?></p>
             <p><strong>Timeline:</strong> <?= $row['timeline'] ?></p>
             <p><strong>Start Date:</strong> <?= $row['start_date'] ?></p>
@@ -505,7 +544,8 @@ button{
         </div>
     </div>
 
-    <!-- Technical Details -->
+    <!-- Technical Details (Commercial Only) -->
+    <?php if($row['type'] === 'commercial'): ?>
     <div class="modal-section">
         <h3>🏗 Technical Details</h3>
         <div class="grid-2">
@@ -518,7 +558,7 @@ button{
         </div>
     </div>
 
-    <!-- Load & Usage -->
+    <!-- Load & Usage (Commercial Only) -->
     <div class="modal-section">
         <h3>🚜 Load & Chemical Info</h3>
         <div class="grid-2">
@@ -531,7 +571,7 @@ button{
         </div>
     </div>
 
-    <!-- Finish -->
+    <!-- Finish (Commercial Only) -->
     <div class="modal-section">
         <h3>🎨 Finish & Design</h3>
         <div class="grid-2">
@@ -541,11 +581,17 @@ button{
             <p><strong>Working Hours:</strong> <?= $row['working_hours'] ?></p>
         </div>
     </div>
+    <?php endif; ?>
 
     <!-- Update History -->
     <div class="modal-section">
         <h3>📝 Update History</h3>
-        <?php $updates = $conn->query("SELECT note, created_at FROM enquiry_updates WHERE enquiry_id=".$row['id']." ORDER BY created_at DESC LIMIT 10"); ?>
+        <?php
+        $updatesStmt = $conn->prepare("SELECT note, created_at FROM enquiry_updates WHERE enquiry_id=? ORDER BY created_at DESC LIMIT 10");
+        $updatesStmt->bind_param("i", $row['id']);
+        $updatesStmt->execute();
+        $updates = $updatesStmt->get_result();
+        ?>
         <?php if($updates && $updates->num_rows): ?>
             <?php while($update = $updates->fetch_assoc()): ?>
                 <div class="message-box">
