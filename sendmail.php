@@ -1,20 +1,34 @@
 <?php
-require 'db.php';
-
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
+
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+header('Content-Type: application/json');
+
+// Safety net: if a fatal error happens anywhere below (e.g. missing file,
+// bad include), still return JSON instead of breaking the frontend's
+// res.json() parsing. Registered before the requires so it also covers
+// failures in those (e.g. a missing vendor/autoload.php on deploy).
+register_shutdown_function(function () {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+        }
+        error_log('Fatal error in sendmail.php: ' . $error['message']);
+        echo json_encode(['success' => false, 'message' => 'Server error: ' . $error['message']]);
+    }
+});
 
 require __DIR__ . '/PHPMailer/src/Exception.php';
 require __DIR__ . '/PHPMailer/src/PHPMailer.php';
 require __DIR__ . '/PHPMailer/src/SMTP.php';
 require __DIR__ . '/vendor/autoload.php';
 require __DIR__ . '/push-config.php';
-
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-header('Content-Type: application/json');
 
 // Define push notification function first
 function sendPushNotification($title, $body, $url = "/", $type = "general") {
@@ -63,6 +77,8 @@ function sendPushNotification($title, $body, $url = "/", $type = "general") {
 }
 
 try {
+    require 'db.php';
+
     // Determine enquiry type
     $enquiry_type = isset($_POST['address']) && !empty($_POST['address']) ? 'residential' : 'commercial';
 
@@ -165,7 +181,7 @@ try {
     // Return Success
     echo json_encode(['success' => true, 'message' => 'Enquiry submitted successfully']);
 
-} catch (Exception $e) {
+} catch (\Throwable $e) {
     error_log("Error: " . $e->getMessage());
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
