@@ -114,6 +114,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->bind_param("si", $status, $id);
         $stmt->execute();
         $stmt->close();
+    }
+
+    if (isset($_POST['add_update'])) {
+        $enquiryId = intval($_POST['id'] ?? 0);
+        $note = trim($_POST['note'] ?? '');
+        if ($enquiryId > 0 && $note !== '') {
+            $stmt = $conn->prepare("INSERT INTO enquiry_updates (enquiry_id, note, created_at) VALUES (?, ?, NOW())");
+            $stmt->bind_param('is', $enquiryId, $note);
+            $stmt->execute();
+            $stmt->close();
+        }
     }}
 $total = $conn->query("SELECT COUNT(*) as count FROM enquiries")->fetch_assoc()['count'];
 $newCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='New'")->fetch_assoc()['c'];

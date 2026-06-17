@@ -1,8 +1,10 @@
-const CACHE_NAME = 'coatcraft-pwa-v1';
+const CACHE_NAME = 'coatcraft-pwa-v2';
+// Only static, non-authenticated assets belong here. Dynamic/login-protected
+// pages (crm-dashboard.php, view-leads.php) must never be precached: caching
+// a redirect-to-login response and later replaying it for a logged-in
+// navigation causes a hard ERR_FAILED in the browser.
 const FILES_TO_CACHE = [
-    '/crm-dashboard.php',
     '/enquiry.html',
-    '/view-leads.php',
     '/manifest.json',
     '/new_logo.png'
 ];
@@ -26,6 +28,16 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
     if (event.request.method !== 'GET') {
+        return;
+    }
+
+    // Page navigations (e.g. view-leads.php, crm-dashboard.php) must always
+    // go to the network so login/session state is never served stale from
+    // cache. Only fall back to cache when fully offline.
+    if (event.request.mode === 'navigate') {
+        event.respondWith(
+            fetch(event.request).catch(() => caches.match('/enquiry.html'))
+        );
         return;
     }
 
