@@ -537,12 +537,6 @@ button{
             <p><strong>Urgent:</strong> <?= $row['urgent'] ?></p>
         </div>
     </div>
-            <p><strong>Industry Usage:</strong> <?= $row['industry_usage'] ?></p>
-            <p><strong>Timeline:</strong> <?= $row['timeline'] ?></p>
-            <p><strong>Start Date:</strong> <?= $row['start_date'] ?></p>
-            <p><strong>Urgent:</strong> <?= $row['urgent'] ?></p>
-        </div>
-    </div>
 
     <!-- Technical Details (Commercial Only) -->
     <?php if($row['type'] === 'commercial'): ?>
