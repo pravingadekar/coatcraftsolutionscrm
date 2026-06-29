@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/auth.php';
-require_login();
 require 'db.php';
 require __DIR__ . '/vendor/autoload.php';
 require __DIR__ . '/push-config.php';
@@ -8,7 +7,18 @@ require __DIR__ . '/push-config.php';
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
 
-function sendPushNotification($title, $body, $url = "/", $type = "general") {
+// Two ways to trigger this:
+// 1) Logged-in browser button -> runs reminder checks for the current
+//    user's own company only (manual test).
+// 2) A cron job hitting ?key=CRON_SECRET (no session) -> loops over every
+//    active company and runs the checks for each. This is the path a real
+//    system cron should call, since cron has no login session.
+$isCronRun = isset($_GET['key']) && hash_equals(CRON_SECRET, $_GET['key']);
+if (!$isCronRun) {
+    require_login();
+}
+
+function sendPushNotification($companyId, $title, $body, $url = "/", $type = "general") {
     global $conn;
 
     $auth = [
@@ -20,10 +30,10 @@ function sendPushNotification($title, $body, $url = "/", $type = "general") {
     ];
 
     $webPush = new WebPush($auth);
-    $result = $conn->query("SELECT endpoint, p256dh, auth FROM push_subscriptions");
-    if (!$result) {
-        return false;
-    }
+    $stmt = $conn->prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE company_id = ?");
+    $stmt->bind_param('i', $companyId);
+    $stmt->execute();
+    $result = $stmt->get_result();
 
     $payload = json_encode([
         'type' => $type,
@@ -54,27 +64,36 @@ function sendPushNotification($title, $body, $url = "/", $type = "general") {
     return $success;
 }
 
-function runReminderChecks() {
+function runReminderChecks($companyId) {
     global $conn;
     $results = [];
 
-    $subscriptionCount = $conn->query("SELECT COUNT(*) AS c FROM push_subscriptions")->fetch_assoc()['c'] ?? 0;
+    $stmt = $conn->prepare("SELECT COUNT(*) AS c FROM push_subscriptions WHERE company_id = ?");
+    $stmt->bind_param('i', $companyId);
+    $stmt->execute();
+    $subscriptionCount = $stmt->get_result()->fetch_assoc()['c'] ?? 0;
     $results[] = "Push subscriptions: $subscriptionCount";
 
-    $overdue = $conn->query("SELECT ef.*, e.name, e.phone FROM enquiry_followups ef JOIN enquiries e ON ef.enquiry_id = e.id WHERE ef.status='Open' AND ef.due_date < CURDATE() AND ef.due_date IS NOT NULL");
+    $stmt = $conn->prepare("SELECT ef.*, e.name, e.phone FROM enquiry_followups ef JOIN enquiries e ON ef.enquiry_id = e.id AND e.company_id = ef.company_id WHERE ef.company_id = ? AND ef.status='Open' AND ef.due_date < CURDATE() AND ef.due_date IS NOT NULL");
+    $stmt->bind_param('i', $companyId);
+    $stmt->execute();
+    $overdue = $stmt->get_result();
     if ($overdue && $overdue->num_rows) {
         while ($row = $overdue->fetch_assoc()) {
-            $status = sendPushNotification("Follow-up Overdue", "Follow-up for {$row['name']} ({$row['phone']}) is overdue: {$row['note']}", "/crm-dashboard.php?view=followups", "followup_reminder") ? 'sent' : 'failed';
+            $status = sendPushNotification($companyId, "Follow-up Overdue", "Follow-up for {$row['name']} ({$row['phone']}) is overdue: {$row['note']}", "/crm-dashboard.php?view=followups", "followup_reminder") ? 'sent' : 'failed';
             $results[] = "Overdue follow-up ({$row['id']}): $status";
         }
     } else {
         $results[] = 'No overdue follow-ups found.';
     }
 
-    $dueSoon = $conn->query("SELECT ef.*, e.name, e.phone FROM enquiry_followups ef JOIN enquiries e ON ef.enquiry_id = e.id WHERE ef.status='Open' AND ef.due_date = CURDATE()");
+    $stmt = $conn->prepare("SELECT ef.*, e.name, e.phone FROM enquiry_followups ef JOIN enquiries e ON ef.enquiry_id = e.id AND e.company_id = ef.company_id WHERE ef.company_id = ? AND ef.status='Open' AND ef.due_date = CURDATE()");
+    $stmt->bind_param('i', $companyId);
+    $stmt->execute();
+    $dueSoon = $stmt->get_result();
     if ($dueSoon && $dueSoon->num_rows) {
         while ($row = $dueSoon->fetch_assoc()) {
-            $status = sendPushNotification("Follow-up Due Today", "Follow-up for {$row['name']} ({$row['phone']}) is due today: {$row['note']}", "/crm-dashboard.php?view=followups", "followup_reminder") ? 'sent' : 'failed';
+            $status = sendPushNotification($companyId, "Follow-up Due Today", "Follow-up for {$row['name']} ({$row['phone']}) is due today: {$row['note']}", "/crm-dashboard.php?view=followups", "followup_reminder") ? 'sent' : 'failed';
             $results[] = "Due today follow-up ({$row['id']}): $status";
         }
     } else {
@@ -84,10 +103,18 @@ function runReminderChecks() {
     return $results;
 }
 
-$run = isset($_GET['run']);
+$run = isset($_GET['run']) || $isCronRun;
 $results = [];
-if ($run) {
-    $results = runReminderChecks();
+if ($run && $isCronRun) {
+    // Cron path: loop every active company, scope every check to its own company_id.
+    $companies = $conn->query("SELECT id, name FROM companies WHERE status IN ('trial', 'active')")->fetch_all(MYSQLI_ASSOC);
+    foreach ($companies as $company) {
+        $results[] = "=== {$company['name']} (company_id={$company['id']}) ===";
+        $results = array_merge($results, runReminderChecks((int)$company['id']));
+    }
+} elseif ($run) {
+    // Manual browser test: scope to the logged-in user's own company only.
+    $results = runReminderChecks(current_company_id());
 }
 ?>
 <!DOCTYPE html>

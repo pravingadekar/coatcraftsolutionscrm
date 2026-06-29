@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>WorkManager CRM - Manage Leads, Close More Deals</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="WorkManager CRM helps service businesses capture leads, manage follow-ups, and close more deals — all from one simple dashboard.">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+    :root{
+        --primary:#0f4a78;
+        --primary-dark:#0a3153;
+        --accent:#f59e0b;
+        --bg:#f4f7fb;
+        --text:#1f2937;
+        --muted:#64748b;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Poppins',sans-serif;color:var(--text);background:var(--bg);line-height:1.6;}
+    a{text-decoration:none;}
+
+    /* Navbar */
+    .navbar{
+        position:sticky;top:0;z-index:50;
+        display:flex;align-items:center;justify-content:space-between;
+        padding:18px 6%;
+        background:rgba(255,255,255,.85);
+        backdrop-filter:blur(10px);
+        border-bottom:1px solid rgba(15,74,120,.08);
+    }
+    .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;color:var(--primary-dark);}
+    .logo .icon{
+        width:38px;height:38px;border-radius:10px;
+        background:linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;
+        box-shadow:0 8px 18px rgba(15,74,120,.3);
+    }
+    .logo span.brand-accent{color:var(--accent);}
+    .nav-actions{display:flex;gap:12px;align-items:center;}
+    .btn{
+        padding:11px 22px;border-radius:10px;font-weight:600;font-size:14px;
+        cursor:pointer;border:none;transition:transform .15s ease, box-shadow .15s ease;
+        display:inline-flex;align-items:center;gap:8px;
+    }
+    .btn-ghost{background:transparent;color:var(--primary-dark);}
+    .btn-ghost:hover{background:rgba(15,74,120,.08);}
+    .btn-primary{background:var(--primary);color:#fff;box-shadow:0 10px 24px rgba(15,74,120,.25);}
+    .btn-primary:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(15,74,120,.32);}
+    .btn-accent{background:linear-gradient(135deg, var(--accent), #d97706);color:#fff;box-shadow:0 10px 24px rgba(245,158,11,.3);}
+    .btn-accent:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(245,158,11,.4);}
+    .btn-lg{padding:16px 32px;font-size:16px;}
+
+    /* Hero */
+    .hero{
+        position:relative;overflow:hidden;
+        padding:90px 6% 110px;
+        background:linear-gradient(160deg, #0f4a78 0%, #0a3153 60%, #071c34 100%);
+        color:#fff;text-align:center;
+    }
+    .hero::before{
+        content:'';position:absolute;top:-120px;right:-120px;width:420px;height:420px;
+        background:radial-gradient(circle, rgba(245,158,11,.25), transparent 70%);
+        border-radius:50%;
+    }
+    .hero::after{
+        content:'';position:absolute;bottom:-160px;left:-100px;width:380px;height:380px;
+        background:radial-gradient(circle, rgba(255,255,255,.08), transparent 70%);
+        border-radius:50%;
+    }
+    .hero-content{position:relative;max-width:760px;margin:0 auto;}
+    .hero-badge{
+        display:inline-flex;align-items:center;gap:8px;
+        background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);
+        padding:8px 18px;border-radius:999px;font-size:13px;font-weight:600;
+        margin-bottom:26px;color:#dbeafe;
+    }
+    .hero h1{font-size:clamp(32px, 5vw, 54px);font-weight:800;line-height:1.15;margin-bottom:20px;letter-spacing:-.02em;}
+    .hero h1 .accent{color:var(--accent);}
+    .hero p{font-size:18px;color:#cbd5e1;max-width:560px;margin:0 auto 36px;}
+    .hero-actions{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;}
+
+    /* Trust strip */
+    .trust-strip{
+        display:flex;justify-content:center;gap:40px;flex-wrap:wrap;
+        padding:28px 6%;background:#fff;border-bottom:1px solid rgba(15,74,120,.08);
+        font-size:13px;color:var(--muted);font-weight:600;
+    }
+    .trust-strip span{display:flex;align-items:center;gap:8px;}
+    .trust-strip i{color:var(--primary);}
+
+    /* Features */
+    .section{padding:90px 6%;max-width:1180px;margin:0 auto;}
+    .section-head{text-align:center;max-width:620px;margin:0 auto 56px;}
+    .section-head .tag{color:var(--primary);font-weight:700;font-size:13px;letter-spacing:.1em;text-transform:uppercase;}
+    .section-head h2{font-size:clamp(26px,3.5vw,38px);font-weight:800;margin:12px 0 14px;color:#0d1d2d;}
+    .section-head p{color:var(--muted);font-size:16px;}
+
+    .features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:26px;}
+    .feature-card{
+        background:#fff;border:1px solid rgba(15,74,120,.08);border-radius:20px;padding:30px;
+        box-shadow:0 18px 40px rgba(15,23,42,.05);transition:transform .2s ease, box-shadow .2s ease;
+    }
+    .feature-card:hover{transform:translateY(-4px);box-shadow:0 24px 50px rgba(15,23,42,.08);}
+    .feature-icon{
+        width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+        background:rgba(15,74,120,.08);color:var(--primary);font-size:22px;margin-bottom:18px;
+    }
+    .feature-card h3{font-size:18px;font-weight:700;margin-bottom:10px;color:#0d1d2d;}
+    .feature-card p{color:var(--muted);font-size:14.5px;}
+
+    /* How it works */
+    .steps{background:#fff;}
+    .steps-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:30px;counter-reset:step;}
+    .step{text-align:center;position:relative;}
+    .step-number{
+        width:46px;height:46px;border-radius:50%;background:var(--primary);color:#fff;
+        display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;
+        margin:0 auto 16px;box-shadow:0 10px 20px rgba(15,74,120,.25);
+    }
+    .step h3{font-size:16px;font-weight:700;margin-bottom:8px;}
+    .step p{color:var(--muted);font-size:14px;}
+
+    /* CTA */
+    .cta{
+        margin:0 6% 90px;border-radius:28px;
+        background:linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color:#fff;padding:64px 8%;text-align:center;
+        box-shadow:0 30px 60px rgba(15,74,120,.3);
+    }
+    .cta h2{font-size:clamp(24px,3.5vw,34px);font-weight:800;margin-bottom:14px;}
+    .cta p{color:#cbd5e1;margin-bottom:30px;font-size:16px;}
+
+    /* Footer */
+    footer{padding:40px 6%;text-align:center;color:var(--muted);font-size:13px;border-top:1px solid rgba(15,74,120,.08);background:#fff;}
+    footer .logo{justify-content:center;margin-bottom:10px;font-size:18px;}
+
+    @media(max-width:640px){
+        .navbar{padding:14px 5%;}
+        .logo{font-size:18px;}
+        .logo .icon{width:32px;height:32px;font-size:15px;}
+        .btn{padding:9px 16px;font-size:13px;}
+        .hero{padding:60px 6% 80px;}
+    }
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="logo"><span class="icon"><i class="fa-solid fa-bolt"></i></span>Work<span class="brand-accent">Manager</span></div>
+    <div class="nav-actions">
+        <a href="login.php" class="btn btn-ghost">Login</a>
+        <a href="signup.php" class="btn btn-primary">Sign Up Free</a>
+    </div>
+</nav>
+
+<section class="hero">
+    <div class="hero-content">
+        <span class="hero-badge"><i class="fa-solid fa-sparkles"></i> Built for service businesses</span>
+        <h1>Never lose a lead again with <span class="accent">WorkManager</span> CRM</h1>
+        <p>Capture enquiries from your website, track every follow-up, and manage your whole team — all from one clean dashboard built for speed.</p>
+        <div class="hero-actions">
+            <a href="signup.php" class="btn btn-accent btn-lg"><i class="fa-solid fa-rocket"></i> Get Started Free</a>
+            <a href="login.php" class="btn btn-ghost btn-lg" style="color:#fff;border:1px solid rgba(255,255,255,.3);"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
+        </div>
+    </div>
+</section>
+
+<div class="trust-strip">
+    <span><i class="fa-solid fa-shield-halved"></i> Your data, fully isolated</span>
+    <span><i class="fa-solid fa-bolt"></i> Set up in minutes</span>
+    <span><i class="fa-solid fa-mobile-screen"></i> Works on any device</span>
+    <span><i class="fa-solid fa-headset"></i> Built for small teams</span>
+</div>
+
+<section class="section">
+    <div class="section-head">
+        <div class="tag">Everything you need</div>
+        <h2>One dashboard. Every lead.</h2>
+        <p>From the moment someone fills your enquiry form to the moment you close the deal — WorkManager keeps it organized.</p>
+    </div>
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-inbox"></i></div>
+            <h3>Smart Lead Capture</h3>
+            <p>Get a ready-to-share enquiry form for your business. Every submission lands straight in your dashboard.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-bell"></i></div>
+            <h3>Follow-up Reminders</h3>
+            <p>Never miss a callback. Set due dates on follow-ups and get notified when they're due or overdue.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-users"></i></div>
+            <h3>Team Access</h3>
+            <p>Invite your staff with their own logins and roles, so everyone works off the same lead list.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-chart-line"></i></div>
+            <h3>Pipeline View</h3>
+            <p>See exactly where every lead stands — new, contacted, closed, or lost — at a glance.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-shield-halved"></i></div>
+            <h3>Private & Secure</h3>
+            <p>Your leads and your team's data are completely separate from every other business on WorkManager.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-file-export"></i></div>
+            <h3>Export Anytime</h3>
+            <p>Download your full lead list as a spreadsheet whenever you need it — your data is always yours.</p>
+        </div>
+    </div>
+</section>
+
+<section class="section steps">
+    <div class="section-head">
+        <div class="tag">Get started</div>
+        <h2>Live in under 5 minutes</h2>
+    </div>
+    <div class="steps-grid">
+        <div class="step">
+            <div class="step-number">1</div>
+            <h3>Create your account</h3>
+            <p>Sign up with your business name and email — no credit card needed.</p>
+        </div>
+        <div class="step">
+            <div class="step-number">2</div>
+            <h3>Get your lead form link</h3>
+            <p>We generate a ready-to-use enquiry form for your business instantly.</p>
+        </div>
+        <div class="step">
+            <div class="step-number">3</div>
+            <h3>Share it everywhere</h3>
+            <p>Put it on your website, WhatsApp, or social media bio.</p>
+        </div>
+        <div class="step">
+            <div class="step-number">4</div>
+            <h3>Start closing deals</h3>
+            <p>Leads land in your dashboard automatically — follow up and convert.</p>
+        </div>
+    </div>
+</section>
+
+<div class="cta">
+    <h2>Ready to organize your leads?</h2>
+    <p>Join WorkManager CRM today — free to get started.</p>
+    <a href="signup.php" class="btn btn-accent btn-lg"><i class="fa-solid fa-rocket"></i> Create Your Free Account</a>
+</div>
+
+<footer>
+    <div class="logo"><span class="icon" style="width:28px;height:28px;font-size:13px;"><i class="fa-solid fa-bolt"></i></span>Work<span class="brand-accent">Manager</span></div>
+    <p>&copy; <span id="year"></span> WorkManager CRM. All rights reserved.</p>
+</footer>
+
+<script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+</body>
+</html>

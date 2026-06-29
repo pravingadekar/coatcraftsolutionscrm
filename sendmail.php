@@ -24,14 +24,15 @@ register_shutdown_function(function () {
     }
 });
 
-require __DIR__ . '/PHPMailer/src/Exception.php';
-require __DIR__ . '/PHPMailer/src/PHPMailer.php';
-require __DIR__ . '/PHPMailer/src/SMTP.php';
-require __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/PHPMailer/src/Exception.php';
+require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
+require_once __DIR__ . '/PHPMailer/src/SMTP.php';
+require_once __DIR__ . '/vendor/autoload.php';
 require __DIR__ . '/push-config.php';
+require_once __DIR__ . '/mailer.php';
 
 // Define push notification function first
-function sendPushNotification($title, $body, $url = "/", $type = "general") {
+function sendPushNotification($companyId, $title, $body, $url = "/", $type = "general") {
     global $conn;
 
     try {
@@ -44,7 +45,10 @@ function sendPushNotification($title, $body, $url = "/", $type = "general") {
         ];
 
         $webPush = new WebPush($auth);
-        $result = $conn->query("SELECT endpoint, p256dh, auth FROM push_subscriptions");
+        $stmt = $conn->prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE company_id = ?");
+        $stmt->bind_param('i', $companyId);
+        $stmt->execute();
+        $result = $stmt->get_result();
         if (!$result) {
             return;
         }
@@ -78,6 +82,37 @@ function sendPushNotification($title, $body, $url = "/", $type = "general") {
 
 try {
     require 'db.php';
+    require __DIR__ . '/rate_limit.php';
+
+    // Resolve tenant from the public form's token — never trust a
+    // client-supplied company_id directly, since that would be trivially
+    // spoofable and let anyone write leads into another tenant's account.
+    $formToken = trim($_POST['form_token'] ?? '');
+    if ($formToken === '') {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Missing form token']);
+        exit;
+    }
+
+    // Max 5 submissions per IP+form per 10 minutes — stops one spammer from
+    // flooding a tenant's lead inbox or hammering the shared SMTP relay.
+    if (isRateLimited($conn, 'sendmail:' . clientIp() . ':' . $formToken, 5, 600)) {
+        http_response_code(429);
+        echo json_encode(['success' => false, 'message' => 'Too many submissions, please try again later.']);
+        exit;
+    }
+
+    $stmt = $conn->prepare("SELECT company_id, smtp_from_name, smtp_from_email, notify_email, company_display_name, logo_path FROM tenant_settings WHERE form_token = ?");
+    $stmt->bind_param('s', $formToken);
+    $stmt->execute();
+    $tenant = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$tenant) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Invalid form token']);
+        exit;
+    }
+    $companyId = (int)$tenant['company_id'];
 
     // Determine enquiry type
     $enquiry_type = isset($_POST['address']) && !empty($_POST['address']) ? 'residential' : 'commercial';
@@ -119,23 +154,23 @@ try {
 
     // SAVE TO DATABASE
     $stmt = $conn->prepare(
-        "INSERT INTO enquiries 
-        (type, name, phone, email, location, address, area, slab, industry_usage, work_type, 
-         heavyload, timeline, epoxy_type, thickness, message, budget, concrete_grade, slab_age, 
-         cracks, contamination, previous_coating, industry_type, forklift, max_load, 
-         chemical_exposure, moisture_issue, water_washing, anti_skid, preferred_color, finish_type, 
+        "INSERT INTO enquiries
+        (company_id, type, name, phone, email, location, address, area, slab, industry_usage, work_type,
+         heavyload, timeline, epoxy_type, thickness, message, budget, concrete_grade, slab_age,
+         cracks, contamination, previous_coating, industry_type, forklift, max_load,
+         chemical_exposure, moisture_issue, water_washing, anti_skid, preferred_color, finish_type,
          line_marking, start_date, urgent, working_hours)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
     );
-    
+
     if (!$stmt) {
         throw new Exception("Prepare failed: " . $conn->error);
     }
 
-    // Bind 34 parameters (type + 33 fields)
+    // Bind 35 parameters (company_id + type + 33 fields)
     $stmt->bind_param(
-        "ssssssssssssssssssssssssssssssssss",
-        $enquiry_type, $name, $phone, $email, $location, $address, $area, $slab,
+        "issssssssssssssssssssssssssssssssss",
+        $companyId, $enquiry_type, $name, $phone, $email, $location, $address, $area, $slab,
         $industry_usage, $work_type, $heavyload, $timeline, $epoxy_type, $thickness,
         $message, $budget, $concrete_grade, $slab_age, $cracks, $contamination,
         $previous_coating, $industry_type, $forklift, $max_load, $chemical_exposure,
@@ -157,12 +192,14 @@ try {
         $mail->SMTPAuth = true;
         $mail->Username = SMTP_USERNAME;
         $mail->Password = SMTP_PASSWORD;
-        $mail->SMTPSecure = 'tls';
+        $mail->SMTPSecure = SMTP_SECURE;
         $mail->Port = SMTP_PORT;
         $mail->Timeout = 10;
 
-        $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
-        $mail->addAddress(SMTP_FROM_EMAIL);
+        $fromName = $tenant['smtp_from_name'] ?: SMTP_FROM_NAME;
+        $notifyEmail = $tenant['notify_email'] ?: SMTP_FROM_EMAIL;
+        $mail->setFrom(SMTP_FROM_EMAIL, $fromName);
+        $mail->addAddress($notifyEmail);
 
         $subject = $enquiry_type === 'residential' ? 'New Residential Flooring Enquiry' : 'New Commercial Epoxy Enquiry';
         $mail->Subject = $subject;
@@ -173,8 +210,16 @@ try {
         error_log('Email Error: ' . $e->getMessage());
     }
 
+    // Thank-you email to the enquirer, sent via the sales mailbox (separate
+    // from the tenant-notification SMTP account above).
+    if ($email !== '') {
+        $tenantDisplayName = $tenant['company_display_name'] ?: SALES_SMTP_FROM_NAME;
+        $tenantLogoPath = __DIR__ . ($tenant['logo_path'] ?: '/new_logo.png');
+        sendEnquiryThankYou($email, $name, $tenantDisplayName, $tenantLogoPath, $enquiry_type);
+    }
+
     // Send Push Notifications
-    sendPushNotification("New " . ucfirst($enquiry_type) . " Enquiry", "From $name - $phone", "/view-leads.php", "new_enquiry");
+    sendPushNotification($companyId, "New " . ucfirst($enquiry_type) . " Enquiry", "From $name - $phone", "/view-leads.php", "new_enquiry");
 
     $conn->close();
 

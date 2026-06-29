@@ -1,66 +1,52 @@
 <?php
-require_once 'auth.php';
-require_login();
-require 'db.php';
+require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/leads.php';
 
 /* Add Client Update Note */
-if(isset($_POST['add_update'])){
-    $id = intval($_POST['id']);
-    $note = trim($_POST['note'] ?? '');
-    if($note !== ''){
-        $stmt = $conn->prepare("INSERT INTO enquiry_updates (enquiry_id, note, created_at) VALUES (?, ?, NOW())");
-        $stmt->bind_param("is", $id, $note);
-        $stmt->execute();
-        $stmt->close();
-    }
+if(isset($_POST['add_update']) && !$isExpired){
+    addLeadUpdate($conn, $companyId, intval($_POST['id']), trim($_POST['note'] ?? ''));
 }
 
 /* Update Status */
-if(isset($_POST['update_status'])){
-    $id = intval($_POST['id']);
-    $status = $_POST['status'];
-    $stmt = $conn->prepare("UPDATE enquiries SET status=? WHERE id=?");
-    $stmt->bind_param("si", $status, $id);
-    $stmt->execute();
-    $stmt->close();
+if(isset($_POST['update_status']) && !$isExpired){
+    updateLeadStatus($conn, $companyId, intval($_POST['id']), $_POST['status']);
 }
 
 /* Delete */
-if(isset($_GET['delete'])){
-    $id = intval($_GET['delete']);
-    $stmt = $conn->prepare("DELETE FROM enquiries WHERE id=?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $stmt->close();
+if(isset($_GET['delete']) && !$isExpired){
+    deleteLead($conn, $companyId, intval($_GET['delete']));
 }
 
 /* Search */
-$where = "";
+$where = "WHERE e.company_id = ?";
 $search = "";
+$searchParams = [$companyId];
+$searchTypes = 'i';
 if(isset($_GET['search'])){
     $search = $_GET['search'];
-    $where = "WHERE name LIKE CONCAT('%', ?, '%') OR phone LIKE CONCAT('%', ?, '%') OR location LIKE CONCAT('%', ?, '%')";
+    $where .= " AND (name LIKE CONCAT('%', ?, '%') OR phone LIKE CONCAT('%', ?, '%') OR location LIKE CONCAT('%', ?, '%'))";
+    $searchParams[] = $search;
+    $searchParams[] = $search;
+    $searchParams[] = $search;
+    $searchTypes .= 'sss';
 }
 
 $sql = "SELECT e.*,
-    (SELECT note FROM enquiry_updates u WHERE u.enquiry_id=e.id ORDER BY created_at DESC LIMIT 1) AS last_update,
-    (SELECT created_at FROM enquiry_updates u WHERE u.enquiry_id=e.id ORDER BY created_at DESC LIMIT 1) AS last_update_at
+    (SELECT note FROM enquiry_updates u WHERE u.company_id=e.company_id AND u.enquiry_id=e.id ORDER BY created_at DESC LIMIT 1) AS last_update,
+    (SELECT created_at FROM enquiry_updates u WHERE u.company_id=e.company_id AND u.enquiry_id=e.id ORDER BY created_at DESC LIMIT 1) AS last_update_at
     FROM enquiries e $where ORDER BY e.id DESC";
-if ($where !== "") {
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sss", $search, $search, $search);
-    $stmt->execute();
-    $result = $stmt->get_result();
-} else {
-    $result = $conn->query($sql);
-}
-$total = $conn->query("SELECT COUNT(*) as count FROM enquiries")->fetch_assoc()['count'];
+$stmt = $conn->prepare($sql);
+$stmt->bind_param($searchTypes, ...$searchParams);
+$stmt->execute();
+$result = $stmt->get_result();
 
-$newCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='New'")->fetch_assoc()['c'];
-$contactedCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='Contacted'")->fetch_assoc()['c'];
-$closedCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='Closed'")->fetch_assoc()['c'];
-$notInterestedCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='Not Interested'")->fetch_assoc()['c'];
-$workDoneCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='Work Done'")->fetch_assoc()['c'];
+$counts = getLeadStatusCounts($conn, $companyId);
+$total = $counts['total'];
+$newCount = $counts['new'];
+$contactedCount = $counts['contacted'];
+$closedCount = $counts['closed'];
+$notInterestedCount = $counts['not_interested'];
+$workDoneCount = $counts['work_done'];
 ?>
 
 <!DOCTYPE html>
@@ -120,10 +106,23 @@ select, input[type="text"]{
 }
 
 button{
-    padding:6px 10px;
+    padding:6px 12px;
     border:none;
-    border-radius:5px;
+    border-radius:6px;
     cursor:pointer;
+    background:#1e73be;
+    color:#fff;
+    font-weight:500;
+}
+
+.reset-btn{
+    background:#64748b;
+    color:#fff;
+}
+
+.view-btn{
+    background:#0f4a78;
+    color:#fff;
 }
 
 .status-new{color:#e67e22;font-weight:600;}
@@ -403,6 +402,12 @@ button{
     <span id="notifyBannerText">Enable notifications to receive new enquiry and follow-up alerts.</span>
     <button id="enableNotificationsBtn" style="background:#0f4a78;color:#fff;border:none;padding:10px 16px;border-radius:12px;cursor:pointer;">Enable Notifications</button>
 </div>
+<?php if ($isExpired): ?>
+<div style="margin:16px 0;padding:16px;border-radius:14px;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <span>Your <?= $companyStatus === 'trial' ? 'trial' : 'plan' ?> expired on <?= htmlspecialchars(date('d M Y', strtotime($companyValidUntil))) ?>. You can still view and export leads, but editing is paused until you renew.</span>
+    <a href="crm-dashboard.php?view=billing" style="background:#991b1b;color:#fff;border:none;padding:10px 16px;border-radius:12px;text-decoration:none;">Renew Now</a>
+</div>
+<?php endif; ?>
 
 <div class="stats">
     <div class="stat-card new">
@@ -431,7 +436,7 @@ button{
 <form method="GET">
 <input type="text" name="search" placeholder="Search name, phone, location">
 <button type="submit">Search</button>
-<a href="view-leads.php"><button type="button">Reset</button></a>
+<a href="view-leads.php"><button type="button" class="reset-btn">Reset</button></a>
 </form>
 </div>
 
@@ -473,6 +478,10 @@ button{
         <?php if($row['last_update_at']): ?>
             <p><small>Updated: <?= date('d M Y H:i', strtotime($row['last_update_at'])) ?></small></p>
         <?php endif; ?>
+        <?php $siteVisit = getLatestSiteVisit($conn, $companyId, $row['id']); ?>
+        <?php if($siteVisit): ?>
+            <p><strong>📅 Site Visit:</strong> <?= date('D, d M Y', strtotime($siteVisit['visit_date'])) ?> at <?= date('h:i A', strtotime($siteVisit['visit_time'])) ?></p>
+        <?php endif; ?>
     </div>
 
     <div class="lead-actions">
@@ -484,7 +493,7 @@ button{
         </a>
 
         <!-- View Details -->
-        <button onclick="openModal(<?= $row['id'] ?>)">View</button>
+        <button class="view-btn" onclick="openModal(<?= $row['id'] ?>)">View</button>
 
         <!-- Status Update -->
         <form method="POST">
@@ -581,18 +590,15 @@ button{
     <div class="modal-section">
         <h3>📝 Update History</h3>
         <?php
-        $updatesStmt = $conn->prepare("SELECT note, created_at FROM enquiry_updates WHERE enquiry_id=? ORDER BY created_at DESC LIMIT 10");
-        $updatesStmt->bind_param("i", $row['id']);
-        $updatesStmt->execute();
-        $updates = $updatesStmt->get_result();
+        $rowUpdates = getLeadUpdates($conn, $companyId, $row['id'], 10);
         ?>
-        <?php if($updates && $updates->num_rows): ?>
-            <?php while($update = $updates->fetch_assoc()): ?>
+        <?php if($rowUpdates): ?>
+            <?php foreach($rowUpdates as $update): ?>
                 <div class="message-box">
                     <p><?= nl2br(htmlspecialchars($update['note'])) ?></p>
                     <small>Updated: <?= date('d M Y, H:i', strtotime($update['created_at'])) ?></small>
                 </div>
-            <?php endwhile; ?>
+            <?php endforeach; ?>
         <?php else: ?>
             <div class="message-box">No updates added yet.</div>
         <?php endif; ?>

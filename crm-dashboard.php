@@ -1,7 +1,7 @@
 <?php
-require_once 'auth.php';
-require_login();
-require 'db.php';
+require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/leads.php';
+require_once __DIR__ . '/mailer.php';
 
 $view = $_GET['view'] ?? 'overview';
 $search = trim($_GET['search'] ?? '');
@@ -21,10 +21,10 @@ if (isset($areaRanges[$areaRange])) {
     [$areaMin, $areaMax] = $areaRanges[$areaRange];
 }
 
-function fetchLeads($conn, $baseQuery, $statusFilter, $typeFilter, $search, $areaMin, $areaMax) {
-    $conditions = [];
-    $params = [];
-    $types = '';
+function fetchLeads($conn, $baseQuery, $companyId, $statusFilter, $typeFilter, $search, $areaMin, $areaMax) {
+    $conditions = ["e.company_id = ?"];
+    $params = [$companyId];
+    $types = 'i';
     if ($statusFilter !== null) {
         $conditions[] = "e.status = ?";
         $params[] = $statusFilter;
@@ -83,72 +83,183 @@ function phoneActions($phone) {
         . '</div></div>';
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isExpired) {
+    $billingBlocked = true;
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['add_daily_note'])) {
-        $title = trim($_POST['title'] ?? '');
-        $note = trim($_POST['note'] ?? '');
-        if ($title !== '' && $note !== '') {
-            $stmt = $conn->prepare("INSERT INTO daily_notes (title, note, created_at) VALUES (?, ?, NOW())");
-            $stmt->bind_param('ss', $title, $note);
-            $stmt->execute();
-            $stmt->close();
-        }
+        addDailyNote($conn, $companyId, trim($_POST['title'] ?? ''), trim($_POST['note'] ?? ''));
     }
 
     if (isset($_POST['add_followup'])) {
-        $enquiryId = intval($_POST['enquiry_id'] ?? 0);
-        $note = trim($_POST['followup_note'] ?? '');
-        $dueDate = trim($_POST['due_date'] ?? '');
-        if ($enquiryId > 0 && $note !== '') {
-            $stmt = $conn->prepare("INSERT INTO enquiry_followups (enquiry_id, note, due_date, status, created_at) VALUES (?, ?, ?, 'Open', NOW())");
-            $stmt->bind_param('iss', $enquiryId, $note, $dueDate);
-            $stmt->execute();
-            $stmt->close();
-        }
+        addLeadFollowup($conn, $companyId, intval($_POST['enquiry_id'] ?? 0), trim($_POST['followup_note'] ?? ''), trim($_POST['due_date'] ?? ''));
     }
 
     if (isset($_POST['update_status'])) {
-        $id = intval($_POST['id']);
-        $status = $_POST['status'];
-        $stmt = $conn->prepare("UPDATE enquiries SET status=? WHERE id=?");
-        $stmt->bind_param("si", $status, $id);
-        $stmt->execute();
-        $stmt->close();
+        updateLeadStatus($conn, $companyId, intval($_POST['id']), $_POST['status']);
     }
 
     if (isset($_POST['add_update'])) {
-        $enquiryId = intval($_POST['id'] ?? 0);
-        $note = trim($_POST['note'] ?? '');
-        if ($enquiryId > 0 && $note !== '') {
-            $stmt = $conn->prepare("INSERT INTO enquiry_updates (enquiry_id, note, created_at) VALUES (?, ?, NOW())");
-            $stmt->bind_param('is', $enquiryId, $note);
+        addLeadUpdate($conn, $companyId, intval($_POST['id'] ?? 0), trim($_POST['note'] ?? ''));
+    }
+
+    if (isset($_POST['schedule_site_visit'])) {
+        $visitLeadId = intval($_POST['id'] ?? 0);
+        $visitDate = trim($_POST['visit_date'] ?? '');
+        $visitSlot = trim($_POST['visit_slot'] ?? '');
+        if (scheduleSiteVisit($conn, $companyId, $visitLeadId, $visitDate, $visitSlot)) {
+            $visitLead = getLeadById($conn, $companyId, $visitLeadId);
+            if ($visitLead && $visitLead['email'] !== '') {
+                $slots = getSiteVisitSlots();
+                $slotEnd = $visitSlot;
+                foreach ($slots as $slot) {
+                    if ($slot['start'] === $visitSlot) {
+                        $slotEnd = $slot['end'];
+                        break;
+                    }
+                }
+                sendSiteVisitInvite(
+                    $visitLead['email'],
+                    $visitLead['name'],
+                    $tenantName,
+                    __DIR__ . ($tenant['logo_path'] ?? '/new_logo.png'),
+                    $visitDate,
+                    $visitSlot,
+                    $slotEnd,
+                    $visitLead['location'] ?? ''
+                );
+            }
+        }
+    }
+
+    if (isset($_POST['add_team_member']) && in_array(current_user()['role'], ['owner', 'admin'])) {
+        $memberEmail = trim($_POST['member_email'] ?? '');
+        $memberRole = in_array($_POST['member_role'] ?? '', ['admin', 'staff']) ? $_POST['member_role'] : 'staff';
+        if ($memberEmail !== '' && filter_var($memberEmail, FILTER_VALIDATE_EMAIL)) {
+            $tempPassword = bin2hex(random_bytes(6));
+            $passwordHash = password_hash($tempPassword, PASSWORD_DEFAULT);
+            $stmt = $conn->prepare("INSERT INTO users (company_id, email, password_hash, role, status) VALUES (?, ?, ?, ?, 'active') ON DUPLICATE KEY UPDATE id = id");
+            $stmt->bind_param('isss', $companyId, $memberEmail, $passwordHash, $memberRole);
+            $stmt->execute();
+            if ($stmt->affected_rows > 0) {
+                $newMemberCreated = ['email' => $memberEmail, 'password' => $tempPassword];
+            } else {
+                $teamError = 'A user with that email already exists for this company.';
+            }
+            $stmt->close();
+        } else {
+            $teamError = 'Please enter a valid email address.';
+        }
+    }
+
+    if (isset($_POST['remove_team_member']) && in_array(current_user()['role'], ['owner', 'admin'])) {
+        $memberId = intval($_POST['user_id'] ?? 0);
+        if ($memberId !== current_user()['id']) {
+            $stmt = $conn->prepare("DELETE FROM users WHERE id = ? AND company_id = ?");
+            $stmt->bind_param('ii', $memberId, $companyId);
             $stmt->execute();
             $stmt->close();
         }
-    }}
-$total = $conn->query("SELECT COUNT(*) as count FROM enquiries")->fetch_assoc()['count'];
-$newCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='New'")->fetch_assoc()['c'];
-$contactedCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='Contacted'")->fetch_assoc()['c'];
-$closedCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='Closed'")->fetch_assoc()['c'];
-$notInterestedCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='Not Interested'")->fetch_assoc()['c'];
-$workDoneCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE status='Work Done'")->fetch_assoc()['c'];
-$industrialCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE type='commercial'")->fetch_assoc()['c'];
-$residentialCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE type='residential'")->fetch_assoc()['c'];
-$weeklyCount = $conn->query("SELECT COUNT(*) as c FROM enquiries WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['c'];
-$openFollowupCount = $conn->query("SELECT COUNT(*) as c FROM enquiry_followups WHERE status='Open'")->fetch_assoc()['c'];
-$overdueCount = $conn->query("SELECT COUNT(*) as c FROM enquiry_followups WHERE status='Open' AND due_date < CURDATE() AND due_date IS NOT NULL")->fetch_assoc()['c'];
-$dueSoonCount = $conn->query("SELECT COUNT(*) as c FROM enquiry_followups WHERE status='Open' AND due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)")->fetch_assoc()['c'];
+    }
 
-$baseQuery = "SELECT e.*, (SELECT note FROM enquiry_updates u WHERE u.enquiry_id=e.id ORDER BY created_at DESC LIMIT 1) AS last_update, (SELECT created_at FROM enquiry_updates u WHERE u.enquiry_id=e.id ORDER BY created_at DESC LIMIT 1) AS last_update_at FROM enquiries e";
-$allLeads = fetchLeads($conn, $baseQuery, null, null, $search, $areaMin, $areaMax);
-$newLeads = fetchLeads($conn, $baseQuery, 'New', null, $search, $areaMin, $areaMax);
-$contactedLeads = fetchLeads($conn, $baseQuery, 'Contacted', null, $search, $areaMin, $areaMax);
-$closedLeads = fetchLeads($conn, $baseQuery, 'Closed', null, $search, $areaMin, $areaMax);
-$industrialLeads = fetchLeads($conn, $baseQuery, null, 'commercial', $search, $areaMin, $areaMax);
-$residentialLeads = fetchLeads($conn, $baseQuery, null, 'residential', $search, $areaMin, $areaMax);
-$recentUpdates = $conn->query("SELECT u.note, u.created_at, e.name, e.status FROM enquiry_updates u JOIN enquiries e ON u.enquiry_id=e.id ORDER BY u.created_at DESC LIMIT 8")->fetch_all(MYSQLI_ASSOC);
-$followupTasks = $conn->query("SELECT f.*, e.name, e.phone, e.location, e.status FROM enquiry_followups f JOIN enquiries e ON e.id=f.enquiry_id ORDER BY f.status ASC, f.due_date IS NULL, f.due_date ASC, f.created_at DESC")->fetch_all(MYSQLI_ASSOC);
-$dailyNotes = $conn->query("SELECT * FROM daily_notes ORDER BY created_at DESC LIMIT 12")->fetch_all(MYSQLI_ASSOC);
+    if (isset($_POST['update_tenant_settings']) && in_array(current_user()['role'], ['owner', 'admin'])) {
+        $displayName = trim($_POST['company_display_name'] ?? '');
+        $themeColor = trim($_POST['theme_color'] ?? '');
+        $smtpFromName = trim($_POST['smtp_from_name'] ?? '');
+        $smtpFromEmail = trim($_POST['smtp_from_email'] ?? '');
+        $notifyEmail = trim($_POST['notify_email'] ?? '');
+
+        if ($displayName === '') {
+            $settingsError = 'Company display name is required.';
+        } elseif (!preg_match('/^#[0-9a-fA-F]{6}$/', $themeColor)) {
+            $settingsError = 'Theme color must be a valid hex color.';
+        } elseif (!filter_var($smtpFromEmail, FILTER_VALIDATE_EMAIL)) {
+            $settingsError = 'SMTP from email must be a valid email address.';
+        } elseif (!filter_var($notifyEmail, FILTER_VALIDATE_EMAIL)) {
+            $settingsError = 'Notification email must be a valid email address.';
+        } else {
+            $newLogoPath = $tenant['logo_path'] ?? null;
+            if (!empty($_FILES['logo']['name']) && $_FILES['logo']['error'] === UPLOAD_ERR_OK) {
+                $allowedExt = ['jpg' => true, 'jpeg' => true, 'png' => true, 'webp' => true];
+                $ext = strtolower(pathinfo($_FILES['logo']['name'], PATHINFO_EXTENSION));
+                if (!isset($allowedExt[$ext])) {
+                    $settingsError = 'Logo must be a JPG, PNG, or WEBP image.';
+                } elseif ($_FILES['logo']['size'] > 1024 * 1024) {
+                    $settingsError = 'Logo must be smaller than 1MB.';
+                } elseif (getimagesize($_FILES['logo']['tmp_name']) === false) {
+                    $settingsError = 'Uploaded file is not a valid image.';
+                } else {
+                    $uploadDir = __DIR__ . '/uploads/logos/';
+                    $destFilename = 'company_' . $companyId . '.' . $ext;
+                    if (move_uploaded_file($_FILES['logo']['tmp_name'], $uploadDir . $destFilename)) {
+                        $newLogoPath = '/uploads/logos/' . $destFilename;
+                    } else {
+                        $settingsError = 'Failed to save the uploaded logo.';
+                    }
+                }
+            }
+
+            if (empty($settingsError)) {
+                $stmt = $conn->prepare("UPDATE tenant_settings SET company_display_name = ?, logo_path = ?, theme_color = ?, smtp_from_name = ?, smtp_from_email = ?, notify_email = ? WHERE company_id = ?");
+                $stmt->bind_param('ssssssi', $displayName, $newLogoPath, $themeColor, $smtpFromName, $smtpFromEmail, $notifyEmail, $companyId);
+                $stmt->execute();
+                $stmt->close();
+
+                $tenant['company_display_name'] = $displayName;
+                $tenant['logo_path'] = $newLogoPath;
+                $tenant['theme_color'] = $themeColor;
+                $tenant['smtp_from_name'] = $smtpFromName;
+                $tenant['smtp_from_email'] = $smtpFromEmail;
+                $tenant['notify_email'] = $notifyEmail;
+                $tenantName = $displayName;
+                $tenantLogo = $newLogoPath;
+                $tenantColor = $themeColor;
+                $settingsSaved = true;
+            }
+        }
+    }
+
+    if (isset($_POST['regenerate_form_token']) && in_array(current_user()['role'], ['owner', 'admin'])) {
+        $newToken = bin2hex(random_bytes(16));
+        $stmt = $conn->prepare("UPDATE tenant_settings SET form_token = ? WHERE company_id = ?");
+        $stmt->bind_param('si', $newToken, $companyId);
+        $stmt->execute();
+        $stmt->close();
+        $tenant['form_token'] = $newToken;
+        $settingsSaved = true;
+    }
+}
+$counts = getLeadStatusCounts($conn, $companyId);
+$total = $counts['total'];
+$newCount = $counts['new'];
+$contactedCount = $counts['contacted'];
+$closedCount = $counts['closed'];
+$notInterestedCount = $counts['not_interested'];
+$workDoneCount = $counts['work_done'];
+$industrialCount = $counts['industrial'];
+$residentialCount = $counts['residential'];
+$weeklyCount = $counts['weekly'];
+$openFollowupCount = $counts['open_followups'];
+$overdueCount = $counts['overdue_followups'];
+$dueSoonCount = $counts['due_soon_followups'];
+
+$baseQuery = "SELECT e.*, (SELECT note FROM enquiry_updates u WHERE u.company_id=e.company_id AND u.enquiry_id=e.id ORDER BY created_at DESC LIMIT 1) AS last_update, (SELECT created_at FROM enquiry_updates u WHERE u.company_id=e.company_id AND u.enquiry_id=e.id ORDER BY created_at DESC LIMIT 1) AS last_update_at FROM enquiries e";
+$allLeads = fetchLeads($conn, $baseQuery, $companyId, null, null, $search, $areaMin, $areaMax);
+$newLeads = fetchLeads($conn, $baseQuery, $companyId, 'New', null, $search, $areaMin, $areaMax);
+$contactedLeads = fetchLeads($conn, $baseQuery, $companyId, 'Contacted', null, $search, $areaMin, $areaMax);
+$closedLeads = fetchLeads($conn, $baseQuery, $companyId, 'Closed', null, $search, $areaMin, $areaMax);
+$industrialLeads = fetchLeads($conn, $baseQuery, $companyId, null, 'commercial', $search, $areaMin, $areaMax);
+$residentialLeads = fetchLeads($conn, $baseQuery, $companyId, null, 'residential', $search, $areaMin, $areaMax);
+$stmt = $conn->prepare("SELECT u.note, u.created_at, e.name, e.status FROM enquiry_updates u JOIN enquiries e ON u.enquiry_id=e.id AND u.company_id=e.company_id WHERE u.company_id=? ORDER BY u.created_at DESC LIMIT 8");
+$stmt->bind_param('i', $companyId); $stmt->execute();
+$recentUpdates = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); $stmt->close();
+
+$stmt = $conn->prepare("SELECT f.*, e.name, e.phone, e.location, e.status FROM enquiry_followups f JOIN enquiries e ON e.id=f.enquiry_id AND e.company_id=f.company_id WHERE f.company_id=? ORDER BY f.status ASC, f.due_date IS NULL, f.due_date ASC, f.created_at DESC");
+$stmt->bind_param('i', $companyId); $stmt->execute();
+$followupTasks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); $stmt->close();
+
+$stmt = $conn->prepare("SELECT * FROM daily_notes WHERE company_id=? ORDER BY created_at DESC LIMIT 12");
+$stmt->bind_param('i', $companyId); $stmt->execute();
+$dailyNotes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); $stmt->close();
 $statusGroups = ['New'=>[], 'Contacted'=>[], 'Closed'=>[]];
 foreach ($allLeads as $lead) {
     if (!isset($statusGroups[$lead['status']])) {
@@ -156,23 +267,29 @@ foreach ($allLeads as $lead) {
     }
     $statusGroups[$lead['status']][] = $lead;
 }
-$reminderTasks = $conn->query("SELECT f.*, e.name, e.phone, e.location FROM enquiry_followups f JOIN enquiries e ON e.id=f.enquiry_id WHERE f.status='Open' AND f.due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY) ORDER BY f.due_date ASC")->fetch_all(MYSQLI_ASSOC);
+$stmt = $conn->prepare("SELECT f.*, e.name, e.phone, e.location FROM enquiry_followups f JOIN enquiries e ON e.id=f.enquiry_id AND e.company_id=f.company_id WHERE f.company_id=? AND f.status='Open' AND f.due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY) ORDER BY f.due_date ASC");
+$stmt->bind_param('i', $companyId); $stmt->execute();
+$reminderTasks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); $stmt->close();
 
 // Lead details for view=lead
 $leadDetails = null;
 $leadUpdates = [];
 if ($view === 'lead' && isset($_GET['id'])) {
     $leadId = intval($_GET['id']);
-    $stmt = $conn->prepare("SELECT * FROM enquiries WHERE id=?");
-    $stmt->bind_param("i", $leadId);
-    $stmt->execute();
-    $leadDetails = $stmt->get_result()->fetch_assoc();
+    $leadDetails = getLeadById($conn, $companyId, $leadId);
     if ($leadDetails) {
-        $stmt = $conn->prepare("SELECT * FROM enquiry_updates WHERE enquiry_id=? ORDER BY created_at DESC");
-        $stmt->bind_param("i", $leadId);
-        $stmt->execute();
-        $leadUpdates = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $leadUpdates = getLeadUpdates($conn, $companyId, $leadId);
     }
+}
+
+// Team members for view=team
+$teamMembers = [];
+if ($view === 'team') {
+    $stmt = $conn->prepare("SELECT id, email, role, status, created_at FROM users WHERE company_id = ? ORDER BY created_at ASC");
+    $stmt->bind_param('i', $companyId);
+    $stmt->execute();
+    $teamMembers = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
 }
 
 function badgeClass($status) {
@@ -223,19 +340,19 @@ function renderTable($rows) {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>CRM Dashboard | CoatCraft</title>
+<title>CRM Dashboard | <?= htmlspecialchars($tenantName) ?></title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="manifest" href="/manifest.json">
-<link rel="icon" type="image/png" href="/new_logo.png">
-<link rel="apple-touch-icon" href="/new_logo.png">
-<meta name="theme-color" content="#0f4a78">
+<link rel="icon" type="image/png" href="<?= htmlspecialchars($tenantLogo) ?>">
+<link rel="apple-touch-icon" href="<?= htmlspecialchars($tenantLogo) ?>">
+<meta name="theme-color" content="<?= htmlspecialchars($tenantColor) ?>">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
-:root{--bg:#f4f7fb;--panel:#ffffff;--primary:#0f4a78;--primary-dark:#0a3153;--accent:#f59e0b;--muted:#475569;--border:#d9e2ea;--brand:#0f4a78;--brand-light:#eef3f9;}
+:root{--bg:#f4f7fb;--panel:#ffffff;--primary:<?= htmlspecialchars($tenantColor) ?>;--primary-dark:#0a3153;--accent:#f59e0b;--muted:#475569;--border:#d9e2ea;--brand:<?= htmlspecialchars($tenantColor) ?>;--brand-light:#eef3f9;}
 *{box-sizing:border-box;}
 body{margin:0;font-family:'Poppins',sans-serif;background:var(--bg);color:#1f2937;}
 .crm-shell{display:flex;min-height:100vh;}
@@ -265,6 +382,8 @@ body{margin:0;font-family:'Poppins',sans-serif;background:var(--bg);color:#1f293
 .topbar p{margin:8px 0 0;color:var(--muted);font-size:15px;max-width:560px;}
 .topbar .action-btn{background:var(--primary);color:#fff;padding:12px 18px;border:none;border-radius:14px;text-decoration:none;cursor:pointer;box-shadow:0 12px 28px rgba(15,23,42,.16);transition:transform .2s ease,box-shadow .2s ease;}
 .topbar .action-btn:hover{transform:translateY(-1px);box-shadow:0 16px 30px rgba(15,23,42,.22);}
+.action-btn.btn-success{background:#27ae60;}
+.action-btn.btn-danger{background:#e74c3c;}
 .panel{background:var(--panel);border:1px solid rgba(217,226,234,.75);border-radius:28px;padding:28px;box-shadow:0 24px 70px rgba(15,23,42,.08);margin-bottom:24px;}
 .stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin-top:18px;}
 .stat-card{background:#fff;border:1px solid rgba(217,226,234,.85);border-radius:22px;padding:26px;box-shadow:0 18px 40px rgba(15,23,42,.06);}
@@ -340,15 +459,15 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
 <body>
 <div class="mobile-topbar">
     <button id="sidebarToggle" type="button" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
-    <img src="new_logo.png" alt="CoatCraft Solutions">
-    <span></span>
+    <img src="<?= htmlspecialchars($tenantLogo) ?>" alt="<?= htmlspecialchars($tenantName) ?>">
+    <span><?= htmlspecialchars($tenantName) ?></span>
 </div>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="crm-shell">
     <aside class="sidebar" id="sidebar">
         <div class="brand">
-            <img src="new_logo.png" class="brand-logo" alt="CoatCraft Solutions">
-           
+            <img src="<?= htmlspecialchars($tenantLogo) ?>" class="brand-logo" alt="<?= htmlspecialchars($tenantName) ?>">
+            <h1><?= htmlspecialchars($tenantName) ?> CRM</h1>
         </div>
         <nav>
             <div class="nav-group">
@@ -376,6 +495,20 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                 <div class="section-title">Tools</div>
                 <a href="?view=calculator" class="<?= $view==='calculator' ? 'active' : '' ?>"><i class="fa-solid fa-calculator"></i>Calculator</a>
             </div>
+
+            <?php if (in_array(current_user()['role'], ['owner', 'admin'])): ?>
+            <div class="nav-group">
+                <div class="section-title">Account</div>
+                <a href="?view=team" class="<?= $view==='team' ? 'active' : '' ?>"><i class="fa-solid fa-users"></i>Team</a>
+                <a href="?view=leadform" class="<?= $view==='leadform' ? 'active' : '' ?>"><i class="fa-solid fa-link"></i>Lead Form</a>
+                <a href="?view=settings" class="<?= $view==='settings' ? 'active' : '' ?>"><i class="fa-solid fa-gear"></i>Settings</a>
+            </div>
+            <?php endif; ?>
+
+            <div class="nav-group">
+                <div class="section-title">Plan</div>
+                <a href="?view=billing" class="<?= $view==='billing' ? 'active' : '' ?>"><i class="fa-solid fa-credit-card"></i>Billing<?= $isExpired ? ' <span style="color:#dc2626;">&bull;</span>' : '' ?></a>
+            </div>
         </nav>
 
         <div class="nav-group">
@@ -394,9 +527,15 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
             <span id="notifyBannerText">Enable notifications to receive new enquiry and follow-up alerts.</span>
             <button id="enableNotificationsBtn" class="notify-btn" type="button">Enable Notifications</button>
         </div>
+        <?php if ($isExpired): ?>
+        <div class="notify-banner" style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;">
+            <span>Your <?= $companyStatus === 'trial' ? 'trial' : 'plan' ?> expired on <?= date('d M Y', strtotime($companyValidUntil)) ?>. You can still view and export your leads, but adding or editing is paused until you renew.</span>
+            <a class="notify-btn" style="text-decoration:none;" href="?view=billing">Renew Now</a>
+        </div>
+        <?php endif; ?>
         <div class="topbar">
             <div>
-                <h2>CoatCraft CRM Command Center</h2>
+                <h2><?= htmlspecialchars($tenantName) ?> CRM Command Center</h2>
                 <p>Manage leads, notes, follow-ups, and sales analytics from one premium dashboard built for speed and clarity.</p>
             </div>
             <a class="action-btn" href="view-leads.php">Legacy List</a>
@@ -458,6 +597,40 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                         <input type="hidden" name="id" value="<?= $leadDetails['id'] ?>">
                         <textarea name="note" placeholder="Enter your communication details..." rows="4" style="width:100%;padding:12px;border:1px solid #d9e2ea;border-radius:8px;font-size:14px;margin-bottom:12px;"></textarea>
                         <button type="submit" name="add_update" class="action-btn" style="padding:10px 20px;">Add Comment</button>
+                    </form>
+                </div>
+                <div class="panel" style="margin-top:24px;">
+                    <h4 style="margin:0 0 16px;">Schedule Site Visit</h4>
+                    <?php $siteVisit = getLatestSiteVisit($conn, $companyId, $leadDetails['id']); ?>
+                    <?php if ($siteVisit): ?>
+                        <?php
+                            $slots = getSiteVisitSlots();
+                            $visitSlotEnd = $siteVisit['visit_time'];
+                            foreach ($slots as $slot) {
+                                if ($slot['start'] === date('H:i', strtotime($siteVisit['visit_time']))) {
+                                    $visitSlotEnd = $slot['end'];
+                                    break;
+                                }
+                            }
+                        ?>
+                        <p style="margin:0 0 16px;"><strong>Latest scheduled visit:</strong>
+                            <?= date('D, d M Y', strtotime($siteVisit['visit_date'])) ?>,
+                            <?= date('g:i A', strtotime($siteVisit['visit_time'])) ?> - <?= date('g:i A', strtotime($visitSlotEnd)) ?>
+                        </p>
+                    <?php endif; ?>
+                    <form method="POST" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+                        <input type="hidden" name="id" value="<?= $leadDetails['id'] ?>">
+                        <label>Date<br>
+                            <input type="date" name="visit_date" required style="padding:10px;border:1px solid #d9e2ea;border-radius:8px;font-size:14px;">
+                        </label>
+                        <label>Time Slot<br>
+                            <select name="visit_slot" required style="padding:10px;border:1px solid #d9e2ea;border-radius:8px;font-size:14px;">
+                                <?php foreach (getSiteVisitSlots() as $slot): ?>
+                                    <option value="<?= $slot['start'] ?>"><?= htmlspecialchars($slot['label']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <button type="submit" name="schedule_site_visit" class="action-btn btn-success" value="1">Confirm Visit</button>
                     </form>
                 </div>
             </div>
@@ -540,7 +713,7 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                                             <?php if ($task['status'] === 'Open'): ?>
                                                 <form method="POST" style="margin:0;display:inline;">
                                                     <input type="hidden" name="task_id" value="<?= intval($task['id']) ?>">
-                                                    <button type="submit" name="complete_followup" value="1" style="padding:8px 12px;border:none;border-radius:10px;background:#27ae60;color:#fff;cursor:pointer;">Complete</button>
+                                                    <button type="submit" name="complete_followup" value="1" class="action-btn btn-success" style="padding:8px 12px;">Complete</button>
                                                 </form>
                                             <?php else: ?>
                                                 <span style="color:#16a34a;font-weight:700;">Done</span>
@@ -780,6 +953,181 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                         <div class="calculator-note">GST Extra</div>
                     </div>
                 </div>
+            </div>
+        <?php elseif ($view === 'team' && in_array(current_user()['role'], ['owner', 'admin'])): ?>
+            <div class="panel">
+                <h3 class="section-title-2">Team</h3>
+                <?php if (!empty($teamError)): ?>
+                    <p style="color:#b91c1c;"><?= htmlspecialchars($teamError) ?></p>
+                <?php endif; ?>
+                <?php if (!empty($newMemberCreated)): ?>
+                    <div class="result" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:16px;margin-bottom:18px;">
+                        <p><strong>User created.</strong> Share these temporary login details — ask them to change the password after first login.</p>
+                        <p>Email: <strong><?= htmlspecialchars($newMemberCreated['email']) ?></strong></p>
+                        <p>Temporary password: <strong><?= htmlspecialchars($newMemberCreated['password']) ?></strong></p>
+                    </div>
+                <?php endif; ?>
+
+                <form method="POST" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:24px;">
+                    <label style="flex:1;min-width:220px;">Email
+                        <input type="email" name="member_email" required style="width:100%;padding:10px;border:1px solid #d9e2ea;border-radius:8px;">
+                    </label>
+                    <label>Role
+                        <select name="member_role" style="padding:10px;border:1px solid #d9e2ea;border-radius:8px;">
+                            <option value="staff">Staff</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </label>
+                    <button type="submit" name="add_team_member" class="action-btn">Add Team Member</button>
+                </form>
+
+                <table>
+                    <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Added</th><th></th></tr></thead>
+                    <tbody>
+                        <?php foreach ($teamMembers as $member): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($member['email']) ?></td>
+                                <td><?= htmlspecialchars(ucfirst($member['role'])) ?></td>
+                                <td><?= htmlspecialchars(ucfirst($member['status'])) ?></td>
+                                <td><?= date('d M Y', strtotime($member['created_at'])) ?></td>
+                                <td>
+                                    <?php if ((int)$member['id'] !== current_user()['id']): ?>
+                                    <form method="POST" onsubmit="return confirm('Remove this team member?');">
+                                        <input type="hidden" name="user_id" value="<?= (int)$member['id'] ?>">
+                                        <button type="submit" name="remove_team_member" class="action-btn btn-danger" style="padding:6px 10px;">Remove</button>
+                                    </form>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php elseif ($view === 'leadform' && in_array(current_user()['role'], ['owner', 'admin'])): ?>
+            <?php
+            $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/');
+            $leadFormUrl = (isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . $basePath . '/lead-form.php?t=' . urlencode($tenant['form_token'] ?? '');
+            ?>
+            <div class="panel">
+                <h3 class="section-title-2">Your Public Lead Form</h3>
+                <p>Share this link anywhere (your website, social media, ads) to start collecting leads. Anyone who submits it lands directly in your CRM.</p>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px;">
+                    <input type="text" id="leadFormUrl" value="<?= htmlspecialchars($leadFormUrl) ?>" readonly style="flex:1;min-width:260px;padding:12px;border:1px solid #d9e2ea;border-radius:8px;font-size:14px;">
+                    <button type="button" class="action-btn" onclick="navigator.clipboard.writeText(document.getElementById('leadFormUrl').value); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy Link', 1500);">Copy Link</button>
+                    <a class="action-btn" href="<?= htmlspecialchars($leadFormUrl) ?>" target="_blank">Preview</a>
+                </div>
+            </div>
+        <?php elseif ($view === 'settings' && in_array(current_user()['role'], ['owner', 'admin'])): ?>
+            <div class="panel">
+                <h3 class="section-title-2">Tenant Settings</h3>
+                <?php if (!empty($settingsError)): ?>
+                    <p style="color:#b91c1c;"><?= htmlspecialchars($settingsError) ?></p>
+                <?php endif; ?>
+                <?php if (!empty($settingsSaved)): ?>
+                    <p style="color:#15803d;">Settings saved.</p>
+                <?php endif; ?>
+
+                <form method="POST" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:16px;max-width:480px;margin-bottom:24px;">
+                    <label>Company display name
+                        <input type="text" name="company_display_name" value="<?= htmlspecialchars($tenant['company_display_name'] ?? '') ?>" required style="width:100%;padding:10px;border:1px solid #d9e2ea;border-radius:8px;">
+                    </label>
+                    <label>Logo
+                        <div style="display:flex;align-items:center;gap:12px;margin-top:6px;">
+                            <img src="<?= htmlspecialchars($tenantLogo) ?>" alt="Current logo" style="height:40px;max-width:140px;object-fit:contain;">
+                            <input type="file" name="logo" accept=".jpg,.jpeg,.png,.webp">
+                        </div>
+                    </label>
+                    <label>Theme color
+                        <input type="color" name="theme_color" value="<?= htmlspecialchars($tenant['theme_color'] ?? '#0f4a78') ?>" style="width:80px;height:40px;padding:2px;border:1px solid #d9e2ea;border-radius:8px;">
+                    </label>
+                    <label>Notification email
+                        <input type="email" name="notify_email" value="<?= htmlspecialchars($tenant['notify_email'] ?? '') ?>" required style="width:100%;padding:10px;border:1px solid #d9e2ea;border-radius:8px;">
+                    </label>
+                    <label>SMTP from name
+                        <input type="text" name="smtp_from_name" value="<?= htmlspecialchars($tenant['smtp_from_name'] ?? '') ?>" required style="width:100%;padding:10px;border:1px solid #d9e2ea;border-radius:8px;">
+                    </label>
+                    <label>SMTP from email
+                        <input type="email" name="smtp_from_email" value="<?= htmlspecialchars($tenant['smtp_from_email'] ?? '') ?>" required style="width:100%;padding:10px;border:1px solid #d9e2ea;border-radius:8px;">
+                    </label>
+                    <button type="submit" name="update_tenant_settings" class="action-btn" style="align-self:flex-start;">Save Settings</button>
+                </form>
+
+                <div style="max-width:480px;">
+                    <label>Lead form token
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+                            <input type="text" id="formTokenValue" value="<?= htmlspecialchars($tenant['form_token'] ?? '') ?>" readonly style="flex:1;min-width:200px;padding:10px;border:1px solid #d9e2ea;border-radius:8px;">
+                            <button type="button" class="action-btn" onclick="navigator.clipboard.writeText(document.getElementById('formTokenValue').value); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy', 1500);">Copy</button>
+                        </div>
+                    </label>
+                    <form method="POST" onsubmit="return confirm('Regenerating the token invalidates your current lead form link. Continue?');" style="margin-top:10px;">
+                        <button type="submit" name="regenerate_form_token" class="action-btn btn-danger" style="padding:8px 14px;">Regenerate Token</button>
+                    </form>
+                </div>
+            </div>
+        <?php elseif ($view === 'billing'): ?>
+            <div class="panel" style="max-width:480px;">
+                <h3 class="section-title-2">Billing</h3>
+                <?php if ($isExpired): ?>
+                    <p style="color:#991b1b;">Your <?= $companyStatus === 'trial' ? 'trial' : 'plan' ?> expired on <?= htmlspecialchars(date('d M Y', strtotime($companyValidUntil))) ?>.</p>
+                <?php else: ?>
+                    <p style="color:#15803d;">Active until <?= htmlspecialchars(date('d M Y', strtotime($companyValidUntil))) ?>.</p>
+                <?php endif; ?>
+
+                <?php if (in_array(current_user()['role'], ['owner', 'admin'])): ?>
+                    <p>Pay ₹999 to extend your access by 30 days from your current expiry (or from today if already expired).</p>
+                    <button type="button" id="payNowBtn" class="action-btn">Pay ₹999 — Extend 30 Days</button>
+                    <p id="payStatus" style="margin-top:10px;"></p>
+                    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+                    <script>
+                    document.getElementById('payNowBtn').addEventListener('click', function () {
+                        var btn = this, statusEl = document.getElementById('payStatus');
+                        btn.disabled = true;
+                        statusEl.textContent = 'Creating order...';
+                        fetch('billing-create-order.php', { method: 'POST' })
+                            .then(function (r) { return r.json(); })
+                            .then(function (order) {
+                                if (!order.ok) { throw new Error(order.error || 'Could not create order'); }
+                                var rzp = new Razorpay({
+                                    key: order.key_id,
+                                    order_id: order.order_id,
+                                    amount: order.amount,
+                                    currency: 'INR',
+                                    name: <?= json_encode($tenantName) ?>,
+                                    description: 'CRM access — 30 days',
+                                    handler: function (response) {
+                                        statusEl.textContent = 'Verifying payment...';
+                                        fetch('billing-verify.php', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify(response)
+                                        })
+                                        .then(function (r) { return r.json(); })
+                                        .then(function (result) {
+                                            if (result.ok) {
+                                                statusEl.style.color = '#15803d';
+                                                statusEl.textContent = 'Payment verified! Access extended to ' + result.valid_until + '. Reloading...';
+                                                setTimeout(function () { window.location.reload(); }, 1200);
+                                            } else {
+                                                statusEl.style.color = '#991b1b';
+                                                statusEl.textContent = 'Payment verification failed: ' + (result.error || 'unknown error');
+                                                btn.disabled = false;
+                                            }
+                                        });
+                                    },
+                                    modal: {
+                                        ondismiss: function () { statusEl.textContent = ''; btn.disabled = false; }
+                                    }
+                                });
+                                rzp.open();
+                            })
+                            .catch(function (err) {
+                                statusEl.style.color = '#991b1b';
+                                statusEl.textContent = err.message;
+                                btn.disabled = false;
+                            });
+                    });
+                    </script>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
 
