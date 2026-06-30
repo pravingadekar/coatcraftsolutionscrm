@@ -40,7 +40,19 @@ define('RAZORPAY_KEY_SECRET', 'CHANGE_ME');
 define('SALES_SMTP_HOST', 'smtpout.secureserver.net');
 define('SALES_SMTP_USERNAME', 'sales@coatcraftsolutions.com');
 define('SALES_SMTP_PASSWORD', 'CHANGE_ME');
-define('SALES_SMTP_SECURE', 'ssl');
-define('SALES_SMTP_PORT', 465);
+define('SALES_SMTP_SECURE', 'tls');
+define('SALES_SMTP_PORT', 587);
 define('SALES_SMTP_FROM_EMAIL', 'sales@coatcraftsolutions.com');
 define('SALES_SMTP_FROM_NAME', 'CoatCraft Solutions');
+
+// Brevo (api.brevo.com) transactional email API — used instead of SMTP for
+// all outgoing mail (tenant notification, thank-you, site visit, password
+// reset) because several hosts block outbound SMTP ports but allow HTTPS.
+// Get an API key from https://app.brevo.com/settings/keys/api and verify
+// SMTP_FROM_EMAIL/SALES_SMTP_FROM_EMAIL as senders there.
+define('BREVO_API_KEY', 'CHANGE_ME');
+
+// Public base URL the app is served from — used to build a public image
+// URL for the tenant logo in emails (linking instead of base64-embedding
+// avoids Gmail's ~102KB "message clipped" truncation on branded emails).
+define('SITE_URL', 'https://coatcraftcrm.workmanager.in');

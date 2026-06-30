@@ -1,6 +1,4 @@
 <?php
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
 
@@ -24,12 +22,18 @@ register_shutdown_function(function () {
     }
 });
 
-require_once __DIR__ . '/PHPMailer/src/Exception.php';
-require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
-require_once __DIR__ . '/PHPMailer/src/SMTP.php';
 require_once __DIR__ . '/vendor/autoload.php';
 require __DIR__ . '/push-config.php';
 require_once __DIR__ . '/mailer.php';
+
+// ===== OLD CODE (PHPMailer direct SMTP) — kept for rollback reference,
+// replaced by sendViaBrevoApi() because the live host blocks outbound SMTP
+// ports (465/587) to external mail servers. Not executed.
+// require_once __DIR__ . '/PHPMailer/src/Exception.php';
+// require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
+// require_once __DIR__ . '/PHPMailer/src/SMTP.php';
+// use PHPMailer\PHPMailer\PHPMailer;
+// use PHPMailer\PHPMailer\Exception;
 
 // Define push notification function first
 function sendPushNotification($companyId, $title, $body, $url = "/", $type = "general") {
@@ -185,30 +189,32 @@ try {
     $stmt->close();
 
     // SEND EMAIL
-    try {
-        $mail = new PHPMailer(true);
-        $mail->isSMTP();
-        $mail->Host = SMTP_HOST;
-        $mail->SMTPAuth = true;
-        $mail->Username = SMTP_USERNAME;
-        $mail->Password = SMTP_PASSWORD;
-        $mail->SMTPSecure = SMTP_SECURE;
-        $mail->Port = SMTP_PORT;
-        $mail->Timeout = 10;
-
-        $fromName = $tenant['smtp_from_name'] ?: SMTP_FROM_NAME;
-        $notifyEmail = $tenant['notify_email'] ?: SMTP_FROM_EMAIL;
-        $mail->setFrom(SMTP_FROM_EMAIL, $fromName);
-        $mail->addAddress($notifyEmail);
-
-        $subject = $enquiry_type === 'residential' ? 'New Residential Flooring Enquiry' : 'New Commercial Epoxy Enquiry';
-        $mail->Subject = $subject;
-        $mail->Body = "New $enquiry_type enquiry from $name\n\nPhone: $phone\nEmail: $email\nArea: $area\n\nDetails:\n$message";
-
-        $mail->send();
-    } catch (Exception $e) {
-        error_log('Email Error: ' . $e->getMessage());
+    $fromName = $tenant['smtp_from_name'] ?: SMTP_FROM_NAME;
+    $notifyEmail = $tenant['notify_email'] ?: SMTP_FROM_EMAIL;
+    $subject = $enquiry_type === 'residential' ? 'New Residential Flooring Enquiry' : 'New Commercial Epoxy Enquiry';
+    $notifyBody = "New $enquiry_type enquiry from $name\n\nPhone: $phone\nEmail: $email\nArea: $area\n\nDetails:\n$message";
+    if (!sendViaBrevoApi(SMTP_FROM_EMAIL, $fromName, $notifyEmail, '', $subject, nl2br(htmlspecialchars($notifyBody)), $notifyBody)) {
+        error_log('Tenant notification email failed for company_id=' . $companyId);
     }
+    // OLD CODE (PHPMailer direct SMTP) — kept for rollback reference, not executed:
+    // try {
+    //     $mail = new PHPMailer(true);
+    //     $mail->isSMTP();
+    //     $mail->Host = SMTP_HOST;
+    //     $mail->SMTPAuth = true;
+    //     $mail->Username = SMTP_USERNAME;
+    //     $mail->Password = SMTP_PASSWORD;
+    //     $mail->SMTPSecure = SMTP_SECURE;
+    //     $mail->Port = SMTP_PORT;
+    //     $mail->Timeout = 10;
+    //     $mail->setFrom(SMTP_FROM_EMAIL, $fromName);
+    //     $mail->addAddress($notifyEmail);
+    //     $mail->Subject = $subject;
+    //     $mail->Body = $notifyBody;
+    //     $mail->send();
+    // } catch (Exception $e) {
+    //     error_log('Email Error: ' . $e->getMessage());
+    // }
 
     // Thank-you email to the enquirer, sent via the sales mailbox (separate
     // from the tenant-notification SMTP account above).

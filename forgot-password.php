@@ -1,11 +1,7 @@
 <?php
 require_once __DIR__ . '/auth.php';
 require __DIR__ . '/db.php';
-require __DIR__ . '/PHPMailer/src/Exception.php';
-require __DIR__ . '/PHPMailer/src/PHPMailer.php';
-require __DIR__ . '/PHPMailer/src/SMTP.php';
-
-use PHPMailer\PHPMailer\PHPMailer;
+require_once __DIR__ . '/mailer.php';
 
 $message = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -30,23 +26,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $resetLink = (isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . '/reset-password.php?token=' . $token;
 
-            try {
-                $mail = new PHPMailer(true);
-                $mail->isSMTP();
-                $mail->Host = SMTP_HOST;
-                $mail->SMTPAuth = true;
-                $mail->Username = SMTP_USERNAME;
-                $mail->Password = SMTP_PASSWORD;
-                $mail->SMTPSecure = SMTP_SECURE;
-                $mail->Port = SMTP_PORT;
-                $mail->Timeout = 10;
-                $mail->setFrom(SMTP_FROM_EMAIL, $user['company_name'] . ' CRM');
-                $mail->addAddress($email);
-                $mail->Subject = 'Reset your CRM password';
-                $mail->Body = "We received a request to reset your password for {$user['company_name']}.\n\nClick this link to set a new password (valid for 1 hour):\n$resetLink\n\nIf you didn't request this, you can ignore this email.";
-                $mail->send();
-            } catch (\Throwable $e) {
-                error_log('Password reset email error: ' . $e->getMessage());
+            $resetBody = "We received a request to reset your password for {$user['company_name']}.\n\nClick this link to set a new password (valid for 1 hour):\n$resetLink\n\nIf you didn't request this, you can ignore this email.";
+            if (!sendViaBrevoApi(SMTP_FROM_EMAIL, $user['company_name'] . ' CRM', $email, '', 'Reset your CRM password', nl2br(htmlspecialchars($resetBody)), $resetBody)) {
+                error_log('Password reset email failed for user_id=' . $user['id']);
             }
         }
     }
@@ -55,6 +37,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // avoids leaking which emails have accounts.
     $message = 'If an account exists for that email, a password reset link has been sent.';
 }
+
+// ===== OLD CODE (PHPMailer direct SMTP) — kept for rollback reference,
+// replaced by sendViaBrevoApi() above because the live host blocks
+// outbound SMTP ports (465/587) to external mail servers. Not executed. =====
+// require __DIR__ . '/PHPMailer/src/Exception.php';
+// require __DIR__ . '/PHPMailer/src/PHPMailer.php';
+// require __DIR__ . '/PHPMailer/src/SMTP.php';
+//
+// use PHPMailer\PHPMailer\PHPMailer;
+//
+// try {
+//     $mail = new PHPMailer(true);
+//     $mail->isSMTP();
+//     $mail->Host = SMTP_HOST;
+//     $mail->SMTPAuth = true;
+//     $mail->Username = SMTP_USERNAME;
+//     $mail->Password = SMTP_PASSWORD;
+//     $mail->SMTPSecure = SMTP_SECURE;
+//     $mail->Port = SMTP_PORT;
+//     $mail->Timeout = 10;
+//     $mail->setFrom(SMTP_FROM_EMAIL, $user['company_name'] . ' CRM');
+//     $mail->addAddress($email);
+//     $mail->Subject = 'Reset your CRM password';
+//     $mail->Body = "We received a request to reset your password for {$user['company_name']}.\n\nClick this link to set a new password (valid for 1 hour):\n$resetLink\n\nIf you didn't request this, you can ignore this email.";
+//     $mail->send();
+// } catch (\Throwable $e) {
+//     error_log('Password reset email error: ' . $e->getMessage());
+// }
 ?>
 <!DOCTYPE html>
 <html lang="en">
