@@ -380,8 +380,8 @@ body{margin:0;font-family:'Poppins',sans-serif;background:var(--bg);color:#1f293
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:24px;}
 .topbar h2{margin:0;font-size:34px;letter-spacing:-.03em;color:#091623;text-shadow:0 4px 18px rgba(15,23,42,.12);}
 .topbar p{margin:8px 0 0;color:var(--muted);font-size:15px;max-width:560px;}
-.topbar .action-btn{background:var(--primary);color:#fff;padding:12px 18px;border:none;border-radius:14px;text-decoration:none;cursor:pointer;box-shadow:0 12px 28px rgba(15,23,42,.16);transition:transform .2s ease,box-shadow .2s ease;}
-.topbar .action-btn:hover{transform:translateY(-1px);box-shadow:0 16px 30px rgba(15,23,42,.22);}
+.action-btn{background:var(--primary);color:#fff;padding:12px 18px;border:none;border-radius:14px;text-decoration:none;cursor:pointer;box-shadow:0 12px 28px rgba(15,23,42,.16);transition:transform .2s ease,box-shadow .2s ease;font-weight:600;font-size:14px;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:8px;}
+.action-btn:hover{transform:translateY(-1px);box-shadow:0 16px 30px rgba(15,23,42,.22);}
 .action-btn.btn-success{background:#27ae60;}
 .action-btn.btn-danger{background:#e74c3c;}
 .panel{background:var(--panel);border:1px solid rgba(217,226,234,.75);border-radius:28px;padding:28px;box-shadow:0 24px 70px rgba(15,23,42,.08);margin-bottom:24px;}
@@ -390,6 +390,25 @@ body{margin:0;font-family:'Poppins',sans-serif;background:var(--bg);color:#1f293
 .stat-card h3{margin:0;font-size:34px;color:#0f2750;}
 .stat-card p{margin:8px 0 0;color:var(--muted);}
 .section-title-2{margin:0 0 16px;font-size:18px;color:#0f172a;}
+.lead-detail-meta{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;}
+.lead-detail-meta .detail-field{min-width:180px;}
+.lead-detail-section{margin-bottom:24px;}
+.lead-detail-section:last-of-type{margin-bottom:0;}
+.lead-detail-section-title{margin:0 0 12px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);}
+.lead-detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;}
+.detail-field{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:12px 16px;min-width:0;}
+.detail-label{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;}
+.detail-value{display:block;font-size:15px;color:#0f172a;font-weight:600;word-break:break-word;}
+.form-textarea{width:100%;padding:14px 16px;border:1px solid #d9e2ea;border-radius:14px;font-size:14px;font-family:inherit;resize:vertical;margin-bottom:14px;transition:border-color .15s ease,box-shadow .15s ease;}
+.form-textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(15,74,120,.12);}
+.form-actions{display:flex;justify-content:flex-end;}
+.visit-scheduled-card{display:flex;align-items:center;gap:14px;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:16px;padding:14px 18px;margin-bottom:20px;color:#166534;}
+.visit-scheduled-card i{font-size:20px;flex-shrink:0;}
+.visit-form{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;}
+.form-group{display:flex;flex-direction:column;gap:6px;}
+.form-group label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+.form-input{padding:12px 14px;border:1px solid #d9e2ea;border-radius:12px;font-size:14px;font-family:inherit;min-width:200px;transition:border-color .15s ease,box-shadow .15s ease;}
+.form-input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(15,74,120,.12);}
 .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;}
 .card{background:#fff;border:1px solid rgba(217,226,234,.75);border-radius:20px;padding:22px;box-shadow:0 18px 40px rgba(15,23,42,.05);}
 .card h3{margin:0 0 14px;font-size:19px;color:#102a4d;}
@@ -453,7 +472,7 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
     .kanban-board{grid-template-columns:1fr;}
     .calculator-grid{grid-template-columns:1fr;}
 }
-@media(max-width:720px){.stats-grid{grid-template-columns:1fr;}.topbar{flex-direction:column;align-items:flex-start;}.topbar form{width:100%;}.topbar form input{width:100%;}.topbar .action-btn{width:100%;}.cards-grid{grid-template-columns:1fr;}.lead-actions{flex-direction:column;align-items:stretch;gap:12px;}.sidebar nav a{padding:12px 14px;font-size:14px;}.sidebar{padding:20px;}}
+@media(max-width:720px){.stats-grid{grid-template-columns:1fr;}.topbar{flex-direction:column;align-items:flex-start;}.topbar form{width:100%;}.topbar form input{width:100%;}.topbar .action-btn{width:100%;}.cards-grid{grid-template-columns:1fr;}.lead-actions{flex-direction:column;align-items:stretch;gap:12px;}.sidebar nav a{padding:12px 14px;font-size:14px;}.sidebar{padding:20px;}.visit-form{flex-direction:column;align-items:stretch;}.form-group,.form-input{width:100%;}.form-actions .action-btn{width:100%;}}
 </style>
 </head>
 <body>
@@ -560,22 +579,75 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                     <h3 class="section-title-2">Lead Details: <?= htmlspecialchars($leadDetails['name']) ?></h3>
                     <a href="?view=all" class="action-btn" style="padding:8px 16px;font-size:14px;">Back to Leads</a>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;">
-                    <div>
-                        <p><strong>Name:</strong> <?= htmlspecialchars($leadDetails['name']) ?></p>
-                        <p><strong>Phone:</strong> <?= htmlspecialchars($leadDetails['phone']) ?></p>
-                        <p><strong>Email:</strong> <?= htmlspecialchars($leadDetails['email']) ?></p>
-                        <p><strong>Location:</strong> <?= htmlspecialchars($leadDetails['location']) ?></p>
-                        <p><strong>Status:</strong> <span class="badge <?= badgeClass($leadDetails['status']) ?>"><?= htmlspecialchars($leadDetails['status']) ?></span></p>
+                <div class="lead-detail-meta">
+                    <div class="detail-field">
+                        <span class="detail-label">Status</span>
+                        <span class="detail-value"><span class="badge <?= badgeClass($leadDetails['status']) ?>"><?= htmlspecialchars($leadDetails['status']) ?></span></span>
                     </div>
-                    <div>
-                        <p><strong>Area:</strong> <?= htmlspecialchars($leadDetails['area']) ?> sqft</p>
-                        <p><strong>Usage:</strong> <?= htmlspecialchars($leadDetails['industry_usage']) ?></p>
-                        <p><strong>Epoxy Type:</strong> <?= htmlspecialchars($leadDetails['epoxy_type']) ?></p>
-                        <p><strong>Thickness:</strong> <?= htmlspecialchars($leadDetails['thickness']) ?> mm</p>
-                        <p><strong>Timeline:</strong> <?= htmlspecialchars($leadDetails['timeline']) ?></p>
+                    <?php if (!empty($leadDetails['created_at'])): ?>
+                    <div class="detail-field">
+                        <span class="detail-label">Submitted</span>
+                        <span class="detail-value"><?= date('d M Y, H:i', strtotime($leadDetails['created_at'])) ?></span>
                     </div>
+                    <?php endif; ?>
                 </div>
+                <?php
+                    $detailSections = [
+                        'Contact Information' => [
+                            'name' => 'Name', 'phone' => 'Phone', 'email' => 'Email',
+                            'location' => 'Location', 'address' => 'Address', 'type' => 'Enquiry Type',
+                        ],
+                        'Project Requirements' => [
+                            'area' => 'Area (sqft)', 'slab' => 'Slab', 'industry_usage' => 'Usage',
+                            'work_type' => 'Work Type', 'heavyload' => 'Heavy Load', 'timeline' => 'Timeline',
+                            'epoxy_type' => 'Epoxy Type', 'thickness' => 'Thickness (mm)', 'budget' => 'Budget',
+                            'message' => 'Message',
+                        ],
+                        'Surface Condition' => [
+                            'concrete_grade' => 'Concrete Grade', 'slab_age' => 'Slab Age', 'cracks' => 'Cracks',
+                            'contamination' => 'Contamination', 'previous_coating' => 'Previous Coating',
+                        ],
+                        'Industrial Details' => [
+                            'industry_type' => 'Industry Type', 'forklift' => 'Forklift', 'max_load' => 'Max Load',
+                            'chemical_exposure' => 'Chemical Exposure', 'moisture_issue' => 'Moisture Issue',
+                            'water_washing' => 'Water Washing',
+                        ],
+                        'Finish & Scheduling' => [
+                            'anti_skid' => 'Anti Skid', 'preferred_color' => 'Preferred Color',
+                            'finish_type' => 'Finish Type', 'line_marking' => 'Line Marking',
+                            'start_date' => 'Start Date', 'urgent' => 'Urgent', 'working_hours' => 'Working Hours',
+                        ],
+                    ];
+                ?>
+                <?php foreach ($detailSections as $sectionTitle => $fields): ?>
+                    <?php
+                        $filled = [];
+                        foreach ($fields as $key => $label) {
+                            if (!empty($leadDetails[$key])) {
+                                $filled[$key] = $label;
+                            }
+                        }
+                    ?>
+                    <?php if (!empty($filled)): ?>
+                        <div class="lead-detail-section">
+                            <h4 class="lead-detail-section-title"><?= htmlspecialchars($sectionTitle) ?></h4>
+                            <div class="lead-detail-grid">
+                                <?php foreach ($filled as $key => $label): ?>
+                                    <div class="detail-field">
+                                        <span class="detail-label"><?= htmlspecialchars($label) ?></span>
+                                        <span class="detail-value"><?php
+                                            if ($key === 'start_date') {
+                                                echo date('d M Y', strtotime($leadDetails[$key]));
+                                            } else {
+                                                echo nl2br(htmlspecialchars($leadDetails[$key]));
+                                            }
+                                        ?></span>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
                 <div class="panel" style="margin-bottom:0;">
                     <h4 style="margin:0 0 16px;">Communication History</h4>
                     <?php if (!empty($leadUpdates)): ?>
@@ -595,8 +667,10 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                     <h4 style="margin:0 0 16px;">Add New Comment</h4>
                     <form method="POST">
                         <input type="hidden" name="id" value="<?= $leadDetails['id'] ?>">
-                        <textarea name="note" placeholder="Enter your communication details..." rows="4" style="width:100%;padding:12px;border:1px solid #d9e2ea;border-radius:8px;font-size:14px;margin-bottom:12px;"></textarea>
-                        <button type="submit" name="add_update" class="action-btn" style="padding:10px 20px;">Add Comment</button>
+                        <textarea name="note" placeholder="Enter your communication details..." rows="4" class="form-textarea" required></textarea>
+                        <div class="form-actions">
+                            <button type="submit" name="add_update" class="action-btn"><i class="fa-solid fa-paper-plane"></i>Add Comment</button>
+                        </div>
                     </form>
                 </div>
                 <div class="panel" style="margin-top:24px;">
@@ -613,24 +687,32 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                                 }
                             }
                         ?>
-                        <p style="margin:0 0 16px;"><strong>Latest scheduled visit:</strong>
-                            <?= date('D, d M Y', strtotime($siteVisit['visit_date'])) ?>,
-                            <?= date('g:i A', strtotime($siteVisit['visit_time'])) ?> - <?= date('g:i A', strtotime($visitSlotEnd)) ?>
-                        </p>
+                        <div class="visit-scheduled-card">
+                            <i class="fa-solid fa-calendar-check"></i>
+                            <div>
+                                <span class="detail-label">Latest scheduled visit</span>
+                                <span class="detail-value">
+                                    <?= date('D, d M Y', strtotime($siteVisit['visit_date'])) ?>,
+                                    <?= date('g:i A', strtotime($siteVisit['visit_time'])) ?> - <?= date('g:i A', strtotime($visitSlotEnd)) ?>
+                                </span>
+                            </div>
+                        </div>
                     <?php endif; ?>
-                    <form method="POST" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+                    <form method="POST" class="visit-form">
                         <input type="hidden" name="id" value="<?= $leadDetails['id'] ?>">
-                        <label>Date<br>
-                            <input type="date" name="visit_date" required style="padding:10px;border:1px solid #d9e2ea;border-radius:8px;font-size:14px;">
-                        </label>
-                        <label>Time Slot<br>
-                            <select name="visit_slot" required style="padding:10px;border:1px solid #d9e2ea;border-radius:8px;font-size:14px;">
+                        <div class="form-group">
+                            <label for="visit_date">Date</label>
+                            <input type="date" id="visit_date" name="visit_date" required class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="visit_slot">Time Slot</label>
+                            <select id="visit_slot" name="visit_slot" required class="form-input">
                                 <?php foreach (getSiteVisitSlots() as $slot): ?>
                                     <option value="<?= $slot['start'] ?>"><?= htmlspecialchars($slot['label']) ?></option>
                                 <?php endforeach; ?>
                             </select>
-                        </label>
-                        <button type="submit" name="schedule_site_visit" class="action-btn btn-success" value="1">Confirm Visit</button>
+                        </div>
+                        <button type="submit" name="schedule_site_visit" class="action-btn btn-success" value="1"><i class="fa-solid fa-check"></i>Confirm Visit</button>
                     </form>
                 </div>
             </div>
