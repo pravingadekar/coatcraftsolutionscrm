@@ -128,6 +128,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isExpired) {
                     $visitLead['location'] ?? ''
                 );
             }
+            if ($visitLead && !empty($visitLead['phone'])) {
+                $slots = getSiteVisitSlots();
+                $slotEnd = $visitSlot;
+                foreach ($slots as $slot) {
+                    if ($slot['start'] === $visitSlot) {
+                        $slotEnd = $slot['end'];
+                        break;
+                    }
+                }
+                sendSiteVisitSms(
+                    $visitLead['phone'],
+                    $visitLead['name'],
+                    $tenantName,
+                    $visitDate,
+                    $visitSlot,
+                    $slotEnd
+                );
+            }
         }
     }
 

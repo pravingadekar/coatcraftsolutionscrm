@@ -80,6 +80,91 @@ function sendViaBrevoApi(
     return false;
 }
 
+/* Sends one transactional SMS via the Brevo API. Returns true on a 2xx
+   response. Delivery to Indian numbers additionally requires the sender ID
+   and message template to be DLT-registered on Brevo's dashboard (TRAI
+   regulation) — a 2xx here only means Brevo accepted the request, not that
+   the carrier delivered it. */
+function sendViaBrevoSms(string $recipientPhone, string $content): bool {
+    $payload = [
+        'sender' => BREVO_SMS_SENDER,
+        'recipient' => $recipientPhone,
+        'content' => $content,
+        'type' => 'transactional',
+    ];
+
+    $ch = curl_init('https://api.brevo.com/v3/transactionalSMS/sms');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => [
+            'api-key: ' . BREVO_API_KEY,
+            'Content-Type: application/json',
+            'accept: application/json',
+        ],
+        CURLOPT_POSTFIELDS => json_encode($payload),
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpCode >= 200 && $httpCode < 300) {
+        return true;
+    }
+    error_log('Brevo SMS send failed: HTTP ' . $httpCode . ' ' . ($curlError ?: $response));
+    return false;
+}
+
+/* Converts a raw lead phone number into Brevo's expected international
+   digits-only format (no '+'). Leads in this app are entered as plain
+   10-digit Indian mobile numbers, so this assumes +91 unless a country
+   code is already present. Returns null if the number can't be normalized. */
+function normalizeIndianPhoneForSms(string $phone): ?string {
+    $digits = preg_replace('/\D/', '', $phone);
+    if ($digits === '') {
+        return null;
+    }
+    if (strlen($digits) === 10) {
+        return '91' . $digits;
+    }
+    if (strlen($digits) === 11 && $digits[0] === '0') {
+        return '91' . substr($digits, 1);
+    }
+    if (strlen($digits) === 12 && substr($digits, 0, 2) === '91') {
+        return $digits;
+    }
+    return strlen($digits) >= 10 ? $digits : null;
+}
+
+/* Sends a short site-visit confirmation SMS, alongside sendSiteVisitInvite()'s
+   email. Best-effort: returns false (and logs) rather than throwing, so a
+   failed SMS never blocks the email or the visit-scheduling request. */
+function sendSiteVisitSms(
+    string $phone,
+    string $toName,
+    string $tenantName,
+    string $visitDate,
+    string $slotStart,
+    string $slotEnd
+): bool {
+    $recipient = normalizeIndianPhoneForSms($phone);
+    if ($recipient === null) {
+        return false;
+    }
+    try {
+        $startTs = strtotime("$visitDate $slotStart");
+        $dayLabel = date('d M Y', $startTs);
+        $timeLabel = date('g:i A', $startTs) . ' - ' . date('g:i A', strtotime("$visitDate $slotEnd"));
+        $content = "Hi $toName, your site visit with $tenantName is confirmed for $dayLabel, $timeLabel. Queries: +917745889111 - CoatCraft Solutions";
+        return sendViaBrevoSms($recipient, $content);
+    } catch (\Throwable $e) {
+        error_log('sendSiteVisitSms failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
 /* Returns an <img> tag pointing at the tenant logo's public URL (if the
    file exists locally), suitable for embedding in HTML email bodies. Links
    to SITE_URL rather than base64-embedding the file — embedding pushed
@@ -142,11 +227,14 @@ function sendSiteVisitInvite(
     string $location = ''
 ): bool {
     try {
-        $startTs = strtotime("$visitDate $slotStart");
-        $endTs = strtotime("$visitDate $slotEnd");
+        $tz = new \DateTimeZone('Asia/Kolkata');
+        $startDt = new \DateTime("$visitDate $slotStart", $tz);
+        $endDt   = new \DateTime("$visitDate $slotEnd",   $tz);
+        $startTs = $startDt->getTimestamp();
+        $endTs   = $endDt->getTimestamp();
 
-        $dayLabel = date('l, d M Y', $startTs);
-        $timeLabel = date('g:i A', $startTs) . ' - ' . date('g:i A', $endTs);
+        $dayLabel = $startDt->format('l, d M Y');
+        $timeLabel = $startDt->format('g:i A') . ' - ' . $endDt->format('g:i A');
 
         $logoHtml = embedTenantLogoHtml($logoFilePath, $tenantName);
 
@@ -256,8 +344,8 @@ function sendSiteVisitInvite(
             . "BEGIN:VEVENT\r\n"
             . "UID:$uid\r\n"
             . "DTSTAMP:" . gmdate('Ymd\THis\Z') . "\r\n"
-            . "DTSTART:" . gmdate('Ymd\THis\Z', $startTs) . "\r\n"
-            . "DTEND:" . gmdate('Ymd\THis\Z', $endTs) . "\r\n"
+            . "DTSTART;TZID=Asia/Kolkata:" . $startDt->format('Ymd\THis') . "\r\n"
+            . "DTEND;TZID=Asia/Kolkata:" . $endDt->format('Ymd\THis') . "\r\n"
             . "SUMMARY:Site Visit - $tenantName\r\n"
             . ($location !== '' ? "LOCATION:" . str_replace(',', '\\,', $location) . "\r\n" : '')
             . "ORGANIZER;CN=$tenantName:mailto:" . SALES_SMTP_FROM_EMAIL . "\r\n"

@@ -40,8 +40,8 @@ define('RAZORPAY_KEY_SECRET', 'CHANGE_ME');
 define('SALES_SMTP_HOST', 'smtpout.secureserver.net');
 define('SALES_SMTP_USERNAME', 'sales@coatcraftsolutions.com');
 define('SALES_SMTP_PASSWORD', 'CHANGE_ME');
-define('SALES_SMTP_SECURE', 'tls');
-define('SALES_SMTP_PORT', 587);
+define('SALES_SMTP_SECURE', 'ssl');
+define('SALES_SMTP_PORT', 465);
 define('SALES_SMTP_FROM_EMAIL', 'sales@coatcraftsolutions.com');
 define('SALES_SMTP_FROM_NAME', 'CoatCraft Solutions');
 
@@ -51,6 +51,17 @@ define('SALES_SMTP_FROM_NAME', 'CoatCraft Solutions');
 // Get an API key from https://app.brevo.com/settings/keys/api and verify
 // SMTP_FROM_EMAIL/SALES_SMTP_FROM_EMAIL as senders there.
 define('BREVO_API_KEY', 'CHANGE_ME');
+
+// Brevo transactional SMS sender — alphanumeric, max 11 chars. Must be
+// DLT-registered on Brevo's dashboard for delivery to Indian numbers
+// (TRAI requirement, separate from this API key).
+define('BREVO_SMS_SENDER', 'CoatCraft');
+
+// Secret key for the missed-call SMS webhook (missed-call-sms.php).
+// MacroDroid sends this in every request so random IPs can't trigger SMS.
+// Generate a new value with: php -r "echo bin2hex(random_bytes(16));"
+define('MISSED_CALL_SECRET', 'CHANGE_ME');
+define('MISSED_CALL_COMPANY_ID', 1); // your company's ID in the companies table
 
 // Public base URL the app is served from — used to build a public image
 // URL for the tenant logo in emails (linking instead of base64-embedding
