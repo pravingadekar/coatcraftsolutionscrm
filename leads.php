@@ -87,11 +87,30 @@ function updateLeadStatus(mysqli $conn, int $companyId, int $leadId, string $sta
 }
 
 function deleteLead(mysqli $conn, int $companyId, int $leadId): bool {
+    $conn->begin_transaction();
+
+    $stmt = $conn->prepare("DELETE FROM enquiry_updates WHERE enquiry_id=? AND company_id=?");
+    $stmt->bind_param('ii', $leadId, $companyId);
+    $stmt->execute();
+    $stmt->close();
+
+    $stmt = $conn->prepare("DELETE FROM enquiry_followups WHERE enquiry_id=? AND company_id=?");
+    $stmt->bind_param('ii', $leadId, $companyId);
+    $stmt->execute();
+    $stmt->close();
+
+    $stmt = $conn->prepare("DELETE FROM enquiry_site_visits WHERE enquiry_id=? AND company_id=?");
+    $stmt->bind_param('ii', $leadId, $companyId);
+    $stmt->execute();
+    $stmt->close();
+
     $stmt = $conn->prepare("DELETE FROM enquiries WHERE id=? AND company_id=?");
     $stmt->bind_param('ii', $leadId, $companyId);
     $stmt->execute();
     $deleted = $stmt->affected_rows > 0;
     $stmt->close();
+
+    $conn->commit();
     return $deleted;
 }
 

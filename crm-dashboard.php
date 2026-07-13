@@ -78,8 +78,8 @@ function phoneActions($phone) {
     return '<div style="display:flex;flex-direction:column;gap:6px;">'
         . '<span>' . $safePhone . '</span>'
         . '<div style="display:flex;gap:6px;">'
-        . '<a href="tel:+' . $waDigits . '" style="padding:4px 9px;border-radius:8px;background:#0f4a78;color:#fff;font-size:11px;text-decoration:none;">📞 Call</a>'
-        . '<a href="https://wa.me/' . $waDigits . '" target="_blank" rel="noopener" style="padding:4px 9px;border-radius:8px;background:#25D366;color:#fff;font-size:11px;text-decoration:none;">💬 WhatsApp</a>'
+        . '<a href="tel:+' . $waDigits . '" style="padding:4px 9px;border-radius:8px;background:#0f4a78;color:#fff;font-size:11px;text-decoration:none;">Call</a>'
+        . '<a href="https://wa.me/' . $waDigits . '" target="_blank" rel="noopener" style="padding:4px 9px;border-radius:8px;background:#25D366;color:#fff;font-size:11px;text-decoration:none;">WhatsApp</a>'
         . '</div></div>';
 }
 
@@ -100,6 +100,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isExpired) {
 
     if (isset($_POST['add_update'])) {
         addLeadUpdate($conn, $companyId, intval($_POST['id'] ?? 0), trim($_POST['note'] ?? ''));
+    }
+
+    if (isset($_POST['delete_lead']) && in_array(current_user()['role'], ['owner', 'admin'])) {
+        deleteLead($conn, $companyId, intval($_POST['id'] ?? 0));
     }
 
     if (isset($_POST['schedule_site_visit'])) {
@@ -322,7 +326,7 @@ function badgeClass($status) {
 
 function renderTable($rows) {
     if (empty($rows)) {
-        return '<tr><td colspan="8" style="text-align:center;">No records found.</td></tr>';
+        return '<tr><td colspan="9" style="text-align:center;">No records found.</td></tr>';
     }
 
     $html = '';
@@ -350,6 +354,14 @@ function renderTable($rows) {
         $html .= '</td>';
         $html .= '<td>' . $lastAt . '</td>';
         $html .= '<td>' . $lastUpdate . '</td>';
+        $html .= '<td>';
+        if (in_array(current_user()['role'], ['owner', 'admin'])) {
+            $html .= '<form method="POST" onsubmit="return confirm(\'Delete this lead? This cannot be undone.\');" style="display:inline;">';
+            $html .= '<input type="hidden" name="id" value="' . intval($row['id']) . '">';
+            $html .= '<button type="submit" name="delete_lead" class="action-btn btn-danger" style="padding:6px 10px;">Delete</button>';
+            $html .= '</form>';
+        }
+        $html .= '</td>';
         $html .= '</tr>';
     }
     return $html;
@@ -1259,6 +1271,7 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                                 <th>Status</th>
                                 <th>Last Update</th>
                                 <th>Note</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
