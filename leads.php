@@ -135,6 +135,25 @@ function getLatestSiteVisit(mysqli $conn, int $companyId, int $leadId): ?array {
     return $row ?: null;
 }
 
+// All scheduled site visits for the tenant (past and future), each joined with
+// its lead's name/phone/email/location so the Site Visits dashboard view
+// doesn't need a separate lookup per row.
+function getAllSiteVisits(mysqli $conn, int $companyId): array {
+    $stmt = $conn->prepare(
+        "SELECT sv.id, sv.enquiry_id, sv.visit_date, sv.visit_time,
+                e.name, e.phone, e.email, e.location
+         FROM enquiry_site_visits sv
+         JOIN enquiries e ON e.id = sv.enquiry_id AND e.company_id = sv.company_id
+         WHERE sv.company_id=?
+         ORDER BY sv.visit_date ASC, sv.visit_time ASC"
+    );
+    $stmt->bind_param('i', $companyId);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $rows;
+}
+
 /* Generates fixed hourly site-visit slots (e.g. 9:00 AM - 10:00 AM) so visits don't overlap. */
 function getSiteVisitSlots(string $start = '09:00', string $end = '18:00', int $stepMinutes = 60): array {
     $slots = [];

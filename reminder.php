@@ -30,7 +30,7 @@ function sendPushNotification($companyId, $title, $body, $url = "/", $type = "ge
     ];
 
     $webPush = new WebPush($auth);
-    $stmt = $conn->prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE company_id = ?");
+    $stmt = $conn->prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE company_id = ?");
     $stmt->bind_param('i', $companyId);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -42,7 +42,10 @@ function sendPushNotification($companyId, $title, $body, $url = "/", $type = "ge
         'url' => $url,
     ]);
 
-    $success = true;
+    // A tenant can have several subscriptions (multiple devices/browsers, some
+    // stale). Report success if delivery reaches at least one live device,
+    // and prune subscriptions the push service confirms are gone for good.
+    $anySuccess = false;
     while ($row = $result->fetch_assoc()) {
         try {
             $subscription = Subscription::create([
@@ -51,17 +54,23 @@ function sendPushNotification($companyId, $title, $body, $url = "/", $type = "ge
                 'authToken' => $row['auth'],
             ]);
             $report = $webPush->sendOneNotification($subscription, $payload);
-            if (!$report->isSuccess()) {
+            if ($report->isSuccess()) {
+                $anySuccess = true;
+            } else {
                 error_log('Push send failure: ' . $report->getReason());
-                $success = false;
+                if ($report->isSubscriptionExpired()) {
+                    $del = $conn->prepare("DELETE FROM push_subscriptions WHERE id = ?");
+                    $del->bind_param('i', $row['id']);
+                    $del->execute();
+                    $del->close();
+                }
             }
         } catch (\Exception $e) {
             error_log('Push exception: ' . $e->getMessage());
-            $success = false;
         }
     }
 
-    return $success;
+    return $anySuccess;
 }
 
 function runReminderChecks($companyId) {
@@ -100,6 +109,20 @@ function runReminderChecks($companyId) {
         $results[] = 'No follow-ups due today.';
     }
 
+    $stmt = $conn->prepare("SELECT sv.*, e.name, e.phone, e.location FROM enquiry_site_visits sv JOIN enquiries e ON sv.enquiry_id = e.id AND e.company_id = sv.company_id WHERE sv.company_id = ? AND sv.visit_date = CURDATE()");
+    $stmt->bind_param('i', $companyId);
+    $stmt->execute();
+    $visitsToday = $stmt->get_result();
+    if ($visitsToday && $visitsToday->num_rows) {
+        while ($row = $visitsToday->fetch_assoc()) {
+            $timeLabel = date('g:i A', strtotime($row['visit_time']));
+            $status = sendPushNotification($companyId, "Site Visit Today", "You have a site visit with {$row['name']} ({$row['phone']}) at {$row['location']} at $timeLabel. You need to go!", "/crm-dashboard.php?view=sitevisits", "site_visit_reminder") ? 'sent' : 'failed';
+            $results[] = "Site visit today ({$row['id']}): $status";
+        }
+    } else {
+        $results[] = 'No site visits scheduled today.';
+    }
+
     return $results;
 }
 
@@ -134,9 +157,10 @@ if ($run && $isCronRun) {
 </head>
 <body>
     <div class="container">
-        <h1>Follow-up Reminder Test</h1>
+        <h1>Reminder Test</h1>
         <p class="note">If a follow-up has <strong>today's date</strong>, clicking the button will attempt to send the due-today notification now.</p>
         <p class="note">If a follow-up date is before today and still open, it will send an overdue notification.</p>
+        <p class="note">If a site visit is scheduled for <strong>today</strong>, it will send a "Site Visit Today" reminder too.</p>
         <a class="button" href="?run=1">Run Reminder Check</a>
         <?php if ($run): ?>
             <div class="result"><?php echo implode("\n", array_map('htmlspecialchars', $results)); ?></div>

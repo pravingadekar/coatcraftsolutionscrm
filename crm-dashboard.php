@@ -150,6 +150,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isExpired) {
                     $slotEnd
                 );
             }
+            if ($visitLead) {
+                $slots = getSiteVisitSlots();
+                $slotEnd = $visitSlot;
+                foreach ($slots as $slot) {
+                    if ($slot['start'] === $visitSlot) {
+                        $slotEnd = $slot['end'];
+                        break;
+                    }
+                }
+                $ownerNotifyDefault = 'pravingadekar05@gmail.com';
+                $fromName = $tenant['smtp_from_name'] ?: SMTP_FROM_NAME;
+                $notifyEmail = $tenant['notify_email'] ?: SMTP_FROM_EMAIL;
+                $subject = 'Site Visit Scheduled - ' . $visitLead['name'];
+                $notifyBody = "A site visit has been scheduled for $tenantName.\n\n"
+                    . "Client: {$visitLead['name']}\n"
+                    . "Phone: {$visitLead['phone']}\n"
+                    . "Location: " . ($visitLead['location'] ?? '') . "\n\n"
+                    . "Visit date: $visitDate\n"
+                    . "Time slot: " . date('g:i A', strtotime($visitSlot)) . ' - ' . date('g:i A', strtotime($slotEnd));
+                $notifyHtml = nl2br(htmlspecialchars($notifyBody));
+                if (!sendViaBrevoApi(SMTP_FROM_EMAIL, $fromName, $notifyEmail, '', $subject, $notifyHtml, $notifyBody)) {
+                    error_log('Site visit owner notification email failed for company_id=' . $companyId);
+                }
+                if (strcasecmp($notifyEmail, $ownerNotifyDefault) !== 0) {
+                    if (!sendViaBrevoApi(SMTP_FROM_EMAIL, $fromName, $ownerNotifyDefault, '', $subject, $notifyHtml, $notifyBody)) {
+                        error_log('Site visit owner notification (default cc) email failed for company_id=' . $companyId);
+                    }
+                }
+            }
         }
     }
 
@@ -538,6 +567,7 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                 <a href="?view=followups" class="<?= $view==='followups' ? 'active' : '' ?>"><i class="fa-solid fa-bell"></i>Follow-ups</a>
                 <a href="?view=notes" class="<?= $view==='notes' ? 'active' : '' ?>"><i class="fa-solid fa-note-sticky"></i>Daily Notes</a>
                 <a href="?view=pipeline" class="<?= $view==='pipeline' ? 'active' : '' ?>"><i class="fa-solid fa-diagram-project"></i>Pipeline</a>
+                <a href="?view=sitevisits" class="<?= $view==='sitevisits' ? 'active' : '' ?>"><i class="fa-solid fa-calendar-days"></i>Site Visits</a>
             </div>
 
             <div class="nav-group">
@@ -1240,6 +1270,79 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                     });
                     </script>
                 <?php endif; ?>
+            </div>
+        <?php elseif ($view === 'sitevisits'): ?>
+            <?php
+            $allSiteVisits = getAllSiteVisits($conn, $companyId);
+            $today = date('Y-m-d');
+            $upcomingVisits = array_values(array_filter($allSiteVisits, fn($v) => $v['visit_date'] >= $today));
+            $pastVisits = array_reverse(array_values(array_filter($allSiteVisits, fn($v) => $v['visit_date'] < $today)));
+            ?>
+            <div class="panel">
+                <h3 class="section-title-2">Upcoming Site Visits</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Client</th>
+                                <th>Phone</th>
+                                <th>Location</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (!empty($upcomingVisits)): ?>
+                                <?php foreach ($upcomingVisits as $visit): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($visit['name']) ?></td>
+                                        <td><?= htmlspecialchars($visit['phone']) ?></td>
+                                        <td><?= htmlspecialchars($visit['location']) ?></td>
+                                        <td><?= date('D, d M Y', strtotime($visit['visit_date'])) ?></td>
+                                        <td><?= date('g:i A', strtotime($visit['visit_time'])) ?></td>
+                                        <td><a class="action-btn" href="?view=lead&id=<?= intval($visit['enquiry_id']) ?>">View Lead</a></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr><td colspan="6">No upcoming site visits scheduled.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="panel">
+                <h3 class="section-title-2">Past Site Visits</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Client</th>
+                                <th>Phone</th>
+                                <th>Location</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (!empty($pastVisits)): ?>
+                                <?php foreach ($pastVisits as $visit): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($visit['name']) ?></td>
+                                        <td><?= htmlspecialchars($visit['phone']) ?></td>
+                                        <td><?= htmlspecialchars($visit['location']) ?></td>
+                                        <td><?= date('D, d M Y', strtotime($visit['visit_date'])) ?></td>
+                                        <td><?= date('g:i A', strtotime($visit['visit_time'])) ?></td>
+                                        <td><a class="action-btn" href="?view=lead&id=<?= intval($visit['enquiry_id']) ?>">View Lead</a></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr><td colspan="6">No past site visits.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         <?php endif; ?>
 
