@@ -70,7 +70,7 @@ self.addEventListener('push', event => {
         icon: '/new_logo.png',
         badge: '/new_logo.png',
         data: url,
-        tag: data.type || 'general' // Prevents duplicate notifications
+        tag: data.tag || data.type || 'general' // Unique per item so multiple reminders don't replace each other; falls back to type-only for re-sends of the same item
     };
     event.waitUntil(
         self.registration.showNotification(title, options)

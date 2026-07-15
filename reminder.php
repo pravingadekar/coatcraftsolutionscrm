@@ -15,10 +15,13 @@ use Minishlink\WebPush\WebPush;
 //    system cron should call, since cron has no login session.
 $isCronRun = isset($_GET['key']) && hash_equals(CRON_SECRET, $_GET['key']);
 if (!$isCronRun) {
+    if (isset($_GET['key'])) {
+        error_log('reminder.php cron call rejected: key did not match CRON_SECRET');
+    }
     require_login();
 }
 
-function sendPushNotification($companyId, $title, $body, $url = "/", $type = "general") {
+function sendPushNotification($companyId, $title, $body, $url = "/", $type = "general", $tag = null) {
     global $conn;
 
     $auth = [
@@ -37,6 +40,7 @@ function sendPushNotification($companyId, $title, $body, $url = "/", $type = "ge
 
     $payload = json_encode([
         'type' => $type,
+        'tag' => $tag ?: $type,
         'title' => $title,
         'body' => $body,
         'url' => $url,
@@ -89,7 +93,7 @@ function runReminderChecks($companyId) {
     $overdue = $stmt->get_result();
     if ($overdue && $overdue->num_rows) {
         while ($row = $overdue->fetch_assoc()) {
-            $status = sendPushNotification($companyId, "Follow-up Overdue", "Follow-up for {$row['name']} ({$row['phone']}) is overdue: {$row['note']}", "/crm-dashboard.php?view=followups", "followup_reminder") ? 'sent' : 'failed';
+            $status = sendPushNotification($companyId, "Follow-up Overdue", "Follow-up for {$row['name']} ({$row['phone']}) is overdue: {$row['note']}", "/crm-dashboard.php?view=followups", "followup_reminder", "followup-{$row['id']}") ? 'sent' : 'failed';
             $results[] = "Overdue follow-up ({$row['id']}): $status";
         }
     } else {
@@ -102,7 +106,7 @@ function runReminderChecks($companyId) {
     $dueSoon = $stmt->get_result();
     if ($dueSoon && $dueSoon->num_rows) {
         while ($row = $dueSoon->fetch_assoc()) {
-            $status = sendPushNotification($companyId, "Follow-up Due Today", "Follow-up for {$row['name']} ({$row['phone']}) is due today: {$row['note']}", "/crm-dashboard.php?view=followups", "followup_reminder") ? 'sent' : 'failed';
+            $status = sendPushNotification($companyId, "Follow-up Due Today", "Follow-up for {$row['name']} ({$row['phone']}) is due today: {$row['note']}", "/crm-dashboard.php?view=followups", "followup_reminder", "followup-{$row['id']}") ? 'sent' : 'failed';
             $results[] = "Due today follow-up ({$row['id']}): $status";
         }
     } else {
@@ -116,7 +120,7 @@ function runReminderChecks($companyId) {
     if ($visitsToday && $visitsToday->num_rows) {
         while ($row = $visitsToday->fetch_assoc()) {
             $timeLabel = date('g:i A', strtotime($row['visit_time']));
-            $status = sendPushNotification($companyId, "Site Visit Today", "You have a site visit with {$row['name']} ({$row['phone']}) at {$row['location']} at $timeLabel. You need to go!", "/crm-dashboard.php?view=sitevisits", "site_visit_reminder") ? 'sent' : 'failed';
+            $status = sendPushNotification($companyId, "Site Visit Today", "You have a site visit with {$row['name']} ({$row['phone']}) at {$row['location']} at $timeLabel. You need to go!", "/crm-dashboard.php?view=sitevisits", "site_visit_reminder", "sitevisit-{$row['id']}") ? 'sent' : 'failed';
             $results[] = "Site visit today ({$row['id']}): $status";
         }
     } else {
