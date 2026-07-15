@@ -564,6 +564,7 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
 
             <div class="nav-group">
                 <div class="section-title">Workflow</div>
+                <a href="?view=notifications" class="<?= $view==='notifications' ? 'active' : '' ?>"><i class="fa-solid fa-list-check"></i>Notifications</a>
                 <a href="?view=followups" class="<?= $view==='followups' ? 'active' : '' ?>"><i class="fa-solid fa-bell"></i>Follow-ups</a>
                 <a href="?view=notes" class="<?= $view==='notes' ? 'active' : '' ?>"><i class="fa-solid fa-note-sticky"></i>Daily Notes</a>
                 <a href="?view=pipeline" class="<?= $view==='pipeline' ? 'active' : '' ?>"><i class="fa-solid fa-diagram-project"></i>Pipeline</a>
@@ -1339,6 +1340,91 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <tr><td colspan="6">No past site visits.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php elseif ($view === 'notifications'): ?>
+            <?php
+            $stmt = $conn->prepare("SELECT ef.*, e.name, e.phone FROM enquiry_followups ef JOIN enquiries e ON ef.enquiry_id = e.id AND e.company_id = ef.company_id WHERE ef.company_id = ? AND ef.status='Open' AND ef.due_date < CURDATE() AND ef.due_date IS NOT NULL ORDER BY ef.due_date ASC");
+            $stmt->bind_param('i', $companyId);
+            $stmt->execute();
+            $notifOverdue = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+            $stmt = $conn->prepare("SELECT ef.*, e.name, e.phone FROM enquiry_followups ef JOIN enquiries e ON ef.enquiry_id = e.id AND e.company_id = ef.company_id WHERE ef.company_id = ? AND ef.status='Open' AND ef.due_date = CURDATE()");
+            $stmt->bind_param('i', $companyId);
+            $stmt->execute();
+            $notifDueToday = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+            $stmt = $conn->prepare("SELECT sv.*, e.name, e.phone, e.location FROM enquiry_site_visits sv JOIN enquiries e ON sv.enquiry_id = e.id AND e.company_id = sv.company_id WHERE sv.company_id = ? AND sv.visit_date = CURDATE() ORDER BY sv.visit_time ASC");
+            $stmt->bind_param('i', $companyId);
+            $stmt->execute();
+            $notifVisitsToday = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            ?>
+            <div class="panel">
+                <h3 class="section-title-2">Overdue Follow-ups (<?= count($notifOverdue) ?>)</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Lead</th><th>Phone</th><th>Note</th><th>Due</th><th>Action</th></tr></thead>
+                        <tbody>
+                            <?php if (!empty($notifOverdue)): ?>
+                                <?php foreach ($notifOverdue as $task): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($task['name']) ?></td>
+                                        <td><?= htmlspecialchars($task['phone']) ?></td>
+                                        <td><?= htmlspecialchars($task['note']) ?></td>
+                                        <td><?= date('d M Y', strtotime($task['due_date'])) ?></td>
+                                        <td><a class="action-btn" href="?view=lead&id=<?= intval($task['enquiry_id']) ?>">View Lead</a></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr><td colspan="5">No overdue follow-ups.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="panel">
+                <h3 class="section-title-2">Follow-ups Due Today (<?= count($notifDueToday) ?>)</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Lead</th><th>Phone</th><th>Note</th><th>Action</th></tr></thead>
+                        <tbody>
+                            <?php if (!empty($notifDueToday)): ?>
+                                <?php foreach ($notifDueToday as $task): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($task['name']) ?></td>
+                                        <td><?= htmlspecialchars($task['phone']) ?></td>
+                                        <td><?= htmlspecialchars($task['note']) ?></td>
+                                        <td><a class="action-btn" href="?view=lead&id=<?= intval($task['enquiry_id']) ?>">View Lead</a></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr><td colspan="4">No follow-ups due today.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="panel">
+                <h3 class="section-title-2">Site Visits Today (<?= count($notifVisitsToday) ?>)</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Client</th><th>Phone</th><th>Location</th><th>Time</th><th>Action</th></tr></thead>
+                        <tbody>
+                            <?php if (!empty($notifVisitsToday)): ?>
+                                <?php foreach ($notifVisitsToday as $visit): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($visit['name']) ?></td>
+                                        <td><?= htmlspecialchars($visit['phone']) ?></td>
+                                        <td><?= htmlspecialchars($visit['location']) ?></td>
+                                        <td><?= date('g:i A', strtotime($visit['visit_time'])) ?></td>
+                                        <td><a class="action-btn" href="?view=lead&id=<?= intval($visit['enquiry_id']) ?>">View Lead</a></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr><td colspan="5">No site visits today.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>

@@ -93,7 +93,7 @@ function runReminderChecks($companyId) {
     $overdue = $stmt->get_result();
     if ($overdue && $overdue->num_rows) {
         while ($row = $overdue->fetch_assoc()) {
-            $status = sendPushNotification($companyId, "Follow-up Overdue", "Follow-up for {$row['name']} ({$row['phone']}) is overdue: {$row['note']}", "/crm-dashboard.php?view=followups", "followup_reminder", "followup-{$row['id']}") ? 'sent' : 'failed';
+            $status = sendPushNotification($companyId, "Follow-up Overdue", "Follow-up for {$row['name']} ({$row['phone']}) is overdue: {$row['note']}", "/crm-dashboard.php?view=notifications", "followup_reminder", "followup-{$row['id']}") ? 'sent' : 'failed';
             $results[] = "Overdue follow-up ({$row['id']}): $status";
         }
     } else {
@@ -106,7 +106,7 @@ function runReminderChecks($companyId) {
     $dueSoon = $stmt->get_result();
     if ($dueSoon && $dueSoon->num_rows) {
         while ($row = $dueSoon->fetch_assoc()) {
-            $status = sendPushNotification($companyId, "Follow-up Due Today", "Follow-up for {$row['name']} ({$row['phone']}) is due today: {$row['note']}", "/crm-dashboard.php?view=followups", "followup_reminder", "followup-{$row['id']}") ? 'sent' : 'failed';
+            $status = sendPushNotification($companyId, "Follow-up Due Today", "Follow-up for {$row['name']} ({$row['phone']}) is due today: {$row['note']}", "/crm-dashboard.php?view=notifications", "followup_reminder", "followup-{$row['id']}") ? 'sent' : 'failed';
             $results[] = "Due today follow-up ({$row['id']}): $status";
         }
     } else {
@@ -120,7 +120,7 @@ function runReminderChecks($companyId) {
     if ($visitsToday && $visitsToday->num_rows) {
         while ($row = $visitsToday->fetch_assoc()) {
             $timeLabel = date('g:i A', strtotime($row['visit_time']));
-            $status = sendPushNotification($companyId, "Site Visit Today", "You have a site visit with {$row['name']} ({$row['phone']}) at {$row['location']} at $timeLabel. You need to go!", "/crm-dashboard.php?view=sitevisits", "site_visit_reminder", "sitevisit-{$row['id']}") ? 'sent' : 'failed';
+            $status = sendPushNotification($companyId, "Site Visit Today", "You have a site visit with {$row['name']} ({$row['phone']}) at {$row['location']} at $timeLabel. You need to go!", "/crm-dashboard.php?view=notifications", "site_visit_reminder", "sitevisit-{$row['id']}") ? 'sent' : 'failed';
             $results[] = "Site visit today ({$row['id']}): $status";
         }
     } else {

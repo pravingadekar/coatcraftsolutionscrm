@@ -60,9 +60,10 @@ self.addEventListener('push', event => {
         body = data.body || 'A new enquiry has been received.';
         url = '/view-leads.php';
     } else if (data.type === 'followup_reminder') {
-        title = 'Follow-up Reminder';
         body = data.body || 'You have pending follow-ups.';
-        url = '/crm-dashboard.php?view=followups';
+        url = data.url || '/crm-dashboard.php?view=notifications';
+    } else if (data.type === 'site_visit_reminder') {
+        url = data.url || '/crm-dashboard.php?view=notifications';
     }
 
     const options = {
