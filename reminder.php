@@ -139,6 +139,7 @@ if ($run && $isCronRun) {
         $results[] = "=== {$company['name']} (company_id={$company['id']}) ===";
         $results = array_merge($results, runReminderChecks((int)$company['id']));
     }
+    file_put_contents(__DIR__ . '/cron-log.txt', date('Y-m-d H:i:s') . ' cron ran, companies=' . count($companies) . "\n", FILE_APPEND);
 } elseif ($run) {
     // Manual browser test: scope to the logged-in user's own company only.
     $results = runReminderChecks(current_company_id());

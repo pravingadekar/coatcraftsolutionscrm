@@ -10,6 +10,7 @@ composer.phar
 # Logs
 *.log
 error_log
+cron-log.txt
 
 # Environment files
 .env
