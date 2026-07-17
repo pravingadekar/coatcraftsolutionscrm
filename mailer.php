@@ -165,6 +165,105 @@ function sendSiteVisitSms(
     }
 }
 
+/* Sends one WhatsApp template message via the Meta WhatsApp Cloud API.
+   Business-initiated messages can only use a pre-approved Message Template
+   (free-form text is rejected outside a 24h customer-initiated window) —
+   this is what keeps the sending number in good standing instead of being
+   flagged, unlike unofficial automation. $bodyParams are plugged into the
+   template's {{1}}, {{2}}, ... placeholders in order. Returns true on a 2xx
+   response from Meta. */
+function sendViaWhatsAppCloudApi(string $toDigits, string $templateName, string $langCode, array $bodyParams): bool {
+    $payload = [
+        'messaging_product' => 'whatsapp',
+        'to' => $toDigits,
+        'type' => 'template',
+        'template' => [
+            'name' => $templateName,
+            'language' => ['code' => $langCode],
+            'components' => [[
+                'type' => 'body',
+                'parameters' => array_map(fn($p) => ['type' => 'text', 'text' => $p], $bodyParams),
+            ]],
+        ],
+    ];
+
+    $ch = curl_init('https://graph.facebook.com/' . WA_API_VERSION . '/' . WA_PHONE_NUMBER_ID . '/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . WA_ACCESS_TOKEN,
+            'Content-Type: application/json',
+        ],
+        CURLOPT_POSTFIELDS => json_encode($payload),
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpCode >= 200 && $httpCode < 300) {
+        return true;
+    }
+    error_log('WhatsApp Cloud API send failed: HTTP ' . $httpCode . ' ' . ($curlError ?: $response));
+    return false;
+}
+
+/* Sends the WhatsApp equivalent of sendEnquiryThankYou(), right after an
+   enquiry form submission. Best-effort: returns false (and logs) rather than
+   throwing, so a failed WhatsApp send never blocks the email or the form's
+   success response. */
+function sendEnquiryThankYouWhatsApp(string $phone, string $name, string $tenantName, string $enquiryType): bool {
+    $recipient = normalizeIndianPhoneForSms($phone);
+    if ($recipient === null) {
+        return false;
+    }
+    try {
+        $enquiryLabel = $enquiryType === 'residential' ? 'residential' : 'commercial';
+        return sendViaWhatsAppCloudApi(
+            $recipient,
+            WA_TEMPLATE_ENQUIRY_THANKYOU,
+            WA_TEMPLATE_LANG,
+            [$name, $tenantName, $enquiryLabel]
+        );
+    } catch (\Throwable $e) {
+        error_log('sendEnquiryThankYouWhatsApp failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/* Sends the WhatsApp equivalent of sendSiteVisitInvite()/sendSiteVisitSms(),
+   alongside those, when a site visit is scheduled. Best-effort like the SMS
+   sender above. */
+function sendSiteVisitWhatsApp(
+    string $phone,
+    string $name,
+    string $tenantName,
+    string $visitDate,
+    string $slotStart,
+    string $slotEnd
+): bool {
+    $recipient = normalizeIndianPhoneForSms($phone);
+    if ($recipient === null) {
+        return false;
+    }
+    try {
+        $startTs = strtotime("$visitDate $slotStart");
+        $dayLabel = date('d M Y', $startTs);
+        $timeLabel = date('g:i A', $startTs) . ' - ' . date('g:i A', strtotime("$visitDate $slotEnd"));
+        return sendViaWhatsAppCloudApi(
+            $recipient,
+            WA_TEMPLATE_SITE_VISIT,
+            WA_TEMPLATE_LANG,
+            [$name, $tenantName, $dayLabel, $timeLabel]
+        );
+    } catch (\Throwable $e) {
+        error_log('sendSiteVisitWhatsApp failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
 /* Returns an <img> tag pointing at the tenant logo's public URL (if the
    file exists locally), suitable for embedding in HTML email bodies. Links
    to SITE_URL rather than base64-embedding the file — embedding pushed

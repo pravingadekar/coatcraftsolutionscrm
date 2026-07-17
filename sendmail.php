@@ -218,11 +218,12 @@ try {
 
     // Thank-you email to the enquirer, sent via the sales mailbox (separate
     // from the tenant-notification SMTP account above).
+    $tenantDisplayName = $tenant['company_display_name'] ?: SALES_SMTP_FROM_NAME;
     if ($email !== '') {
-        $tenantDisplayName = $tenant['company_display_name'] ?: SALES_SMTP_FROM_NAME;
         $tenantLogoPath = __DIR__ . ($tenant['logo_path'] ?: '/new_logo.png');
         sendEnquiryThankYou($email, $name, $tenantDisplayName, $tenantLogoPath, $enquiry_type);
     }
+    sendEnquiryThankYouWhatsApp($phone, $name, $tenantDisplayName, $enquiry_type);
 
     // Send Push Notifications
     sendPushNotification($companyId, "New " . ucfirst($enquiry_type) . " Enquiry", "From $name - $phone", "/view-leads.php", "new_enquiry");

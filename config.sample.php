@@ -67,3 +67,19 @@ define('MISSED_CALL_COMPANY_ID', 1); // your company's ID in the companies table
 // URL for the tenant logo in emails (linking instead of base64-embedding
 // avoids Gmail's ~102KB "message clipped" truncation on branded emails).
 define('SITE_URL', 'https://coatcraftcrm.workmanager.in');
+
+// Meta WhatsApp Cloud API (graph.facebook.com) — sends the same client-facing
+// notifications (enquiry thank-you, site visit confirmation) as WhatsApp
+// messages alongside the existing emails. Business-initiated messages only
+// work through pre-approved Message Templates (see WA_TEMPLATE_* below) —
+// free-form text is rejected outside a 24h customer-initiated window. Get
+// the Phone Number ID / WABA ID / a permanent System User access token from
+// Meta Business Manager > WhatsApp > API Setup.
+define('WA_PHONE_NUMBER_ID', 'CHANGE_ME');
+define('WA_ACCESS_TOKEN', 'CHANGE_ME');
+define('WA_API_VERSION', 'v21.0');
+define('WA_TEMPLATE_LANG', 'en');
+// Exact approved template names from WhatsApp Manager > Message Templates —
+// must match exactly (name, language, and param count) or the send fails.
+define('WA_TEMPLATE_ENQUIRY_THANKYOU', 'enquiry_thank_you');
+define('WA_TEMPLATE_SITE_VISIT', 'site_visit_confirmation');

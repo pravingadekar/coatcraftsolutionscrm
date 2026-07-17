@@ -149,6 +149,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isExpired) {
                     $visitSlot,
                     $slotEnd
                 );
+                sendSiteVisitWhatsApp(
+                    $visitLead['phone'],
+                    $visitLead['name'],
+                    $tenantName,
+                    $visitDate,
+                    $visitSlot,
+                    $slotEnd
+                );
             }
             if ($visitLead) {
                 $slots = getSiteVisitSlots();
