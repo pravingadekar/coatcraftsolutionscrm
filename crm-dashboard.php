@@ -149,7 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isExpired) {
                     $visitSlot,
                     $slotEnd
                 );
-                sendSiteVisitWhatsApp(
+                $waVisitSent = sendSiteVisitWhatsApp(
                     $visitLead['phone'],
                     $visitLead['name'],
                     $tenantName,
@@ -157,6 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isExpired) {
                     $visitSlot,
                     $slotEnd
                 );
+                logWhatsAppSend($conn, $companyId, $visitLeadId, WA_TEMPLATE_SITE_VISIT, $waVisitSent);
             }
             if ($visitLead) {
                 $slots = getSiteVisitSlots();
@@ -187,6 +188,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isExpired) {
                     }
                 }
             }
+        }
+    }
+
+    if (isset($_POST['send_quote_followup'])) {
+        $followupLeadId = intval($_POST['id'] ?? 0);
+        $followupLead = getLeadById($conn, $companyId, $followupLeadId);
+        if ($followupLead) {
+            $sent = sendQuoteFollowupWhatsApp($followupLead['phone'], $followupLead['name'], $tenantName);
+            logWhatsAppSend($conn, $companyId, $followupLeadId, WA_TEMPLATE_QUOTE_FOLLOWUP, $sent);
+            $quoteFollowupToast = ['name' => $followupLead['name'], 'success' => $sent];
         }
     }
 
@@ -288,6 +299,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isExpired) {
     }
 }
 $counts = getLeadStatusCounts($conn, $companyId);
+$unreadWhatsAppCount = getUnreadWhatsAppCount($conn, $companyId);
 $total = $counts['total'];
 $newCount = $counts['new'];
 $contactedCount = $counts['contacted'];
@@ -363,18 +375,17 @@ function badgeClass($status) {
 
 function renderTable($rows) {
     if (empty($rows)) {
-        return '<tr><td colspan="9" style="text-align:center;">No records found.</td></tr>';
+        return '<tr><td colspan="8" style="text-align:center;">No records found.</td></tr>';
     }
 
     $html = '';
     foreach ($rows as $row) {
-        $lastUpdate = $row['last_update'] ? htmlspecialchars($row['last_update']) : 'No update';
         $lastAt = $row['last_update_at'] ? date('d M Y H:i', strtotime($row['last_update_at'])) : '-';
         $html .= '<tr>';
         $html .= '<td>' . intval($row['id']) . '</td>';
         $html .= '<td><a href="?view=lead&id=' . intval($row['id']) . '" style="color:#0f4a78;text-decoration:none;font-weight:500;">' . htmlspecialchars($row['name']) . '</a></td>';
         $html .= '<td>' . phoneActions($row['phone']) . '</td>';
-        $html .= '<td>' . htmlspecialchars($row['location']) . '</td>';
+        $html .= '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' . htmlspecialchars($row['location']) . '">' . htmlspecialchars($row['location']) . '</td>';
         $html .= '<td>' . date('d M Y', strtotime($row['created_at'])) . '</td>';
         $html .= '<td>';
         $html .= '<form method="POST" style="display:inline;">';
@@ -390,8 +401,11 @@ function renderTable($rows) {
         $html .= '</form>';
         $html .= '</td>';
         $html .= '<td>' . $lastAt . '</td>';
-        $html .= '<td>' . $lastUpdate . '</td>';
         $html .= '<td>';
+        $html .= '<form method="POST" style="display:inline;">';
+        $html .= '<input type="hidden" name="id" value="' . intval($row['id']) . '">';
+        $html .= '<button type="submit" name="send_quote_followup" class="action-btn btn-success" style="padding:6px 10px;" title="Send Quotation Follow-up"><i class="fa-brands fa-whatsapp"></i></button>';
+        $html .= '</form> ';
         if (in_array(current_user()['role'], ['owner', 'admin'])) {
             $html .= '<form method="POST" onsubmit="return confirm(\'Delete this lead? This cannot be undone.\');" style="display:inline;">';
             $html .= '<input type="hidden" name="id" value="' . intval($row['id']) . '">';
@@ -543,6 +557,21 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
 </style>
 </head>
 <body>
+<?php if (isset($quoteFollowupToast)): ?>
+    <div id="quoteFollowupToast" style="position:fixed;top:20px;right:20px;z-index:9999;padding:14px 20px;border-radius:10px;color:#fff;font-weight:600;font-size:14px;box-shadow:0 8px 20px rgba(0,0,0,.15);background:<?= $quoteFollowupToast['success'] ? '#22a559' : '#e63946' ?>;">
+        <?php if ($quoteFollowupToast['success']): ?>
+            <i class="fa-brands fa-whatsapp"></i> WhatsApp follow-up sent to <?= htmlspecialchars($quoteFollowupToast['name']) ?>
+        <?php else: ?>
+            <i class="fa-solid fa-triangle-exclamation"></i> Failed to send WhatsApp to <?= htmlspecialchars($quoteFollowupToast['name']) ?>
+        <?php endif; ?>
+    </div>
+    <script>
+        setTimeout(function () {
+            var t = document.getElementById('quoteFollowupToast');
+            if (t) { t.style.transition = 'opacity .4s'; t.style.opacity = '0'; setTimeout(function () { t.remove(); }, 400); }
+        }, 3500);
+    </script>
+<?php endif; ?>
 <div class="mobile-topbar">
     <button id="sidebarToggle" type="button" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
     <img src="<?= htmlspecialchars($tenantLogo) ?>" alt="<?= htmlspecialchars($tenantName) ?>">
@@ -601,6 +630,7 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
 
         <div class="nav-group">
             <div class="section-title">Quick Actions</div>
+            <a class="link-button" href="whatsapp-chats.php"><i class="fa-brands fa-whatsapp"></i>WhatsApp Chats<?= $unreadWhatsAppCount > 0 ? ' <span style="background:#22a559;color:#fff;font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;margin-left:auto;">' . $unreadWhatsAppCount . '</span>' : '' ?></a>
             <a class="link-button" href="view-leads.php"><i class="fa-solid fa-table-list"></i>Open Lead Board</a>
             <a class="link-button" href="export.php"><i class="fa-solid fa-file-export"></i>Export Leads</a>
         </div>
@@ -782,6 +812,42 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                             </select>
                         </div>
                         <button type="submit" name="schedule_site_visit" class="action-btn btn-success" value="1"><i class="fa-solid fa-check"></i>Confirm Visit</button>
+                    </form>
+                </div>
+                <div class="panel" style="margin-top:24px;">
+                    <h4 style="margin:0 0 16px;">WhatsApp Messages</h4>
+                    <?php $inboundMessages = getWhatsAppInboundMessages($conn, $companyId, $leadDetails['id']); ?>
+                    <?php if (!empty($inboundMessages)): ?>
+                        <div class="note-list">
+                            <?php foreach ($inboundMessages as $msg): ?>
+                                <li>
+                                    <strong><?= date('d M Y H:i', strtotime($msg['received_at'])) ?></strong><br>
+                                    <?= nl2br(htmlspecialchars($msg['message_body'])) ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <p>No WhatsApp replies from this lead yet.</p>
+                    <?php endif; ?>
+                </div>
+                <div class="panel" style="margin-top:24px;">
+                    <h4 style="margin:0 0 16px;">WhatsApp Quotation Follow-up</h4>
+                    <?php $lastQuoteFollowup = getLatestWhatsAppSend($conn, $companyId, $leadDetails['id'], WA_TEMPLATE_QUOTE_FOLLOWUP); ?>
+                    <?php if ($lastQuoteFollowup): ?>
+                        <div class="visit-scheduled-card">
+                            <i class="fa-brands fa-whatsapp"></i>
+                            <div>
+                                <span class="detail-label">Last sent</span>
+                                <span class="detail-value">
+                                    <?= date('d M Y, g:i A', strtotime($lastQuoteFollowup['created_at'])) ?>
+                                    (<?= $lastQuoteFollowup['status'] === 'sent' ? 'Sent' : 'Failed' ?>)
+                                </span>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                    <form method="POST">
+                        <input type="hidden" name="id" value="<?= $leadDetails['id'] ?>">
+                        <button type="submit" name="send_quote_followup" class="action-btn btn-success" value="1"><i class="fa-brands fa-whatsapp"></i>Send Quotation Follow-up</button>
                     </form>
                 </div>
             </div>
@@ -1467,7 +1533,6 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                                 <th>Date</th>
                                 <th>Status</th>
                                 <th>Last Update</th>
-                                <th>Note</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>

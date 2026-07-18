@@ -264,6 +264,27 @@ function sendSiteVisitWhatsApp(
     }
 }
 
+/* Sends the WhatsApp quotation follow-up template, triggered manually by
+   staff from the CRM dashboard (not an automatic trigger like the two
+   functions above). Best-effort like the other WhatsApp senders. */
+function sendQuoteFollowupWhatsApp(string $phone, string $name, string $tenantName): bool {
+    $recipient = normalizeIndianPhoneForSms($phone);
+    if ($recipient === null) {
+        return false;
+    }
+    try {
+        return sendViaWhatsAppCloudApi(
+            $recipient,
+            WA_TEMPLATE_QUOTE_FOLLOWUP,
+            WA_TEMPLATE_LANG,
+            [$name, $tenantName]
+        );
+    } catch (\Throwable $e) {
+        error_log('sendQuoteFollowupWhatsApp failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
 /* Returns an <img> tag pointing at the tenant logo's public URL (if the
    file exists locally), suitable for embedding in HTML email bodies. Links
    to SITE_URL rather than base64-embedding the file — embedding pushed

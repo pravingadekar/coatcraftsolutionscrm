@@ -171,6 +171,130 @@ function getSiteVisitSlots(string $start = '09:00', string $end = '18:00', int $
     return $slots;
 }
 
+function logWhatsAppSend(mysqli $conn, int $companyId, int $leadId, string $templateName, bool $success): bool {
+    $status = $success ? 'sent' : 'failed';
+    $stmt = $conn->prepare("INSERT INTO enquiry_whatsapp_log (company_id, enquiry_id, template_name, status, created_at) SELECT ?, id, ?, ?, NOW() FROM enquiries WHERE id = ? AND company_id = ?");
+    $stmt->bind_param('issii', $companyId, $templateName, $status, $leadId, $companyId);
+    $stmt->execute();
+    $inserted = $stmt->affected_rows > 0;
+    $stmt->close();
+    return $inserted;
+}
+
+function getLatestWhatsAppSend(mysqli $conn, int $companyId, int $leadId, string $templateName): ?array {
+    $stmt = $conn->prepare("SELECT * FROM enquiry_whatsapp_log WHERE enquiry_id=? AND company_id=? AND template_name=? ORDER BY created_at DESC LIMIT 1");
+    $stmt->bind_param('iis', $leadId, $companyId, $templateName);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $row ?: null;
+}
+
+// Matches on the last 10 digits so it doesn't matter whether the stored lead
+// phone or the incoming WhatsApp "from" number includes a country code.
+function findLeadIdByPhone(mysqli $conn, int $companyId, string $phone): ?int {
+    $stmt = $conn->prepare("SELECT id FROM enquiries WHERE company_id=? AND RIGHT(phone,10)=RIGHT(?,10) ORDER BY id DESC LIMIT 1");
+    $stmt->bind_param('is', $companyId, $phone);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $row ? (int)$row['id'] : null;
+}
+
+// Idempotent on wa_message_id — Meta retries webhook delivery on any
+// non-2xx/slow response, so a duplicate delivery must not double-insert.
+function logWhatsAppInbound(mysqli $conn, int $companyId, ?int $enquiryId, string $phone, string $waMessageId, string $messageBody): bool {
+    $stmt = $conn->prepare("INSERT IGNORE INTO whatsapp_inbound_messages (company_id, enquiry_id, phone, wa_message_id, message_body, received_at) VALUES (?, ?, ?, ?, ?, NOW())");
+    $stmt->bind_param('iisss', $companyId, $enquiryId, $phone, $waMessageId, $messageBody);
+    $stmt->execute();
+    $inserted = $stmt->affected_rows > 0;
+    $stmt->close();
+    return $inserted;
+}
+
+function getWhatsAppInboundMessages(mysqli $conn, int $companyId, int $leadId): array {
+    $stmt = $conn->prepare("SELECT * FROM whatsapp_inbound_messages WHERE enquiry_id=? AND company_id=? ORDER BY received_at DESC");
+    $stmt->bind_param('ii', $leadId, $companyId);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $rows;
+}
+
+function getUnreadWhatsAppCount(mysqli $conn, int $companyId): int {
+    $stmt = $conn->prepare("SELECT COUNT(*) c FROM whatsapp_inbound_messages WHERE company_id=? AND is_read=0");
+    $stmt->bind_param('i', $companyId);
+    $stmt->execute();
+    $count = (int)$stmt->get_result()->fetch_assoc()['c'];
+    $stmt->close();
+    return $count;
+}
+
+// One row per lead that has ever sent an inbound WhatsApp reply, most
+// recently active first — this is the left-hand conversation list on
+// whatsapp-chats.php, so staff can see who replied without opening every
+// lead individually.
+function getWhatsAppConversations(mysqli $conn, int $companyId): array {
+    $stmt = $conn->prepare(
+        "SELECT e.id AS enquiry_id, e.name, e.phone,
+                m.message_body AS last_message, m.received_at AS last_received_at,
+                (SELECT COUNT(*) FROM whatsapp_inbound_messages m2 WHERE m2.enquiry_id = e.id AND m2.company_id = e.company_id AND m2.is_read = 0) AS unread_count
+         FROM whatsapp_inbound_messages m
+         JOIN enquiries e ON e.id = m.enquiry_id AND e.company_id = m.company_id
+         WHERE m.company_id = ? AND m.id = (
+             SELECT MAX(m3.id) FROM whatsapp_inbound_messages m3 WHERE m3.enquiry_id = e.id AND m3.company_id = e.company_id
+         )
+         ORDER BY m.received_at DESC"
+    );
+    $stmt->bind_param('i', $companyId);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $rows;
+}
+
+// Merges inbound replies and outbound template sends into one chronological
+// thread for a single lead, so whatsapp-chats.php can render it like a
+// normal WhatsApp conversation (incoming vs outgoing bubbles).
+function getWhatsAppThread(mysqli $conn, int $companyId, int $leadId): array {
+    $thread = [];
+
+    $stmt = $conn->prepare("SELECT message_body, received_at FROM whatsapp_inbound_messages WHERE enquiry_id=? AND company_id=? ORDER BY received_at ASC");
+    $stmt->bind_param('ii', $leadId, $companyId);
+    $stmt->execute();
+    foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+        $thread[] = ['direction' => 'in', 'body' => $row['message_body'], 'at' => $row['received_at']];
+    }
+    $stmt->close();
+
+    $templateLabels = [
+        WA_TEMPLATE_ENQUIRY_THANKYOU => 'Enquiry thank-you message sent',
+        WA_TEMPLATE_SITE_VISIT => 'Site visit confirmation sent',
+        WA_TEMPLATE_QUOTE_FOLLOWUP => 'Quotation follow-up sent',
+    ];
+    $stmt = $conn->prepare("SELECT template_name, status, created_at FROM enquiry_whatsapp_log WHERE enquiry_id=? AND company_id=? ORDER BY created_at ASC");
+    $stmt->bind_param('ii', $leadId, $companyId);
+    $stmt->execute();
+    foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+        if ($row['status'] !== 'sent') {
+            continue;
+        }
+        $label = $templateLabels[$row['template_name']] ?? ('Message sent (' . $row['template_name'] . ')');
+        $thread[] = ['direction' => 'out', 'body' => $label, 'at' => $row['created_at']];
+    }
+    $stmt->close();
+
+    usort($thread, fn($a, $b) => strtotime($a['at']) <=> strtotime($b['at']));
+    return $thread;
+}
+
+function markWhatsAppRead(mysqli $conn, int $companyId, int $leadId): void {
+    $stmt = $conn->prepare("UPDATE whatsapp_inbound_messages SET is_read=1 WHERE enquiry_id=? AND company_id=?");
+    $stmt->bind_param('ii', $leadId, $companyId);
+    $stmt->execute();
+    $stmt->close();
+}
+
 function addDailyNote(mysqli $conn, int $companyId, string $title, string $note): bool {
     if ($title === '' || $note === '') {
         return false;

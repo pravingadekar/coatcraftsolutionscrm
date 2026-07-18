@@ -83,3 +83,13 @@ define('WA_TEMPLATE_LANG', 'en');
 // must match exactly (name, language, and param count) or the send fails.
 define('WA_TEMPLATE_ENQUIRY_THANKYOU', 'enquiry_thank_you');
 define('WA_TEMPLATE_SITE_VISIT', 'site_visit_confirmation');
+define('WA_TEMPLATE_QUOTE_FOLLOWUP', 'quote_followup');
+
+// Incoming-message webhook (whatsapp-webhook.php). WA_WEBHOOK_VERIFY_TOKEN is
+// a random string you choose and paste into Meta's Webhook config (App >
+// WhatsApp > Configuration) — Meta echoes it back on setup to prove you own
+// the endpoint. WA_APP_SECRET is from Meta App Dashboard > Settings > Basic >
+// App Secret — used to verify the X-Hub-Signature-256 header on every
+// incoming webhook call, so a spoofed request can't inject fake messages.
+define('WA_WEBHOOK_VERIFY_TOKEN', 'CHANGE_ME');
+define('WA_APP_SECRET', 'CHANGE_ME');

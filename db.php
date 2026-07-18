@@ -111,6 +111,46 @@ $conn->query("CREATE TABLE IF NOT EXISTS enquiry_site_visits (
     INDEX idx_company_enquiry (company_id, enquiry_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+// Log of manually-triggered WhatsApp template sends from the CRM dashboard
+// (e.g. the "Send Quotation Follow-up" button) — lets the dashboard show
+// "last sent" status per lead instead of staff re-sending blind.
+$conn->query("CREATE TABLE IF NOT EXISTS enquiry_whatsapp_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    enquiry_id INT NOT NULL,
+    template_name VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_company_enquiry (company_id, enquiry_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+// Incoming WhatsApp messages (customer replies), received via
+// whatsapp-webhook.php. unique_wa_message_id makes inserts idempotent since
+// Meta retries webhook delivery on any non-2xx/slow response.
+$conn->query("CREATE TABLE IF NOT EXISTS whatsapp_inbound_messages (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    enquiry_id INT DEFAULT NULL,
+    phone VARCHAR(20) NOT NULL,
+    wa_message_id VARCHAR(100) NOT NULL,
+    message_body TEXT,
+    received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_wa_message_id (wa_message_id),
+    INDEX idx_company_enquiry (company_id, enquiry_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+// is_read powers the unread badge/count on the WhatsApp Chats page — added
+// after the table above already existed in production, so it's an idempotent
+// ALTER (checked via information_schema) rather than part of the CREATE, same
+// pattern as migrate_multitenant.php.
+$hasIsReadColumn = $conn->query(
+    "SELECT COUNT(*) c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'whatsapp_inbound_messages' AND COLUMN_NAME = 'is_read'"
+)->fetch_assoc()['c'] > 0;
+if (!$hasIsReadColumn) {
+    $conn->query("ALTER TABLE whatsapp_inbound_messages ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 0 AFTER message_body");
+}
+
 // Daily notes table
 $conn->query("CREATE TABLE IF NOT EXISTS daily_notes (
     id INT AUTO_INCREMENT PRIMARY KEY,

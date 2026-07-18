@@ -25,6 +25,7 @@ register_shutdown_function(function () {
 require_once __DIR__ . '/vendor/autoload.php';
 require __DIR__ . '/push-config.php';
 require_once __DIR__ . '/mailer.php';
+require_once __DIR__ . '/leads.php';
 
 // ===== OLD CODE (PHPMailer direct SMTP) — kept for rollback reference,
 // replaced by sendViaBrevoApi() because the live host blocks outbound SMTP
@@ -185,7 +186,8 @@ try {
     if (!$stmt->execute()) {
         throw new Exception("Execute failed: " . $stmt->error);
     }
-    
+
+    $enquiryId = $stmt->insert_id;
     $stmt->close();
 
     // SEND EMAIL
@@ -223,7 +225,8 @@ try {
         $tenantLogoPath = __DIR__ . ($tenant['logo_path'] ?: '/new_logo.png');
         sendEnquiryThankYou($email, $name, $tenantDisplayName, $tenantLogoPath, $enquiry_type);
     }
-    sendEnquiryThankYouWhatsApp($phone, $name, $tenantDisplayName, $enquiry_type);
+    $waSent = sendEnquiryThankYouWhatsApp($phone, $name, $tenantDisplayName, $enquiry_type);
+    logWhatsAppSend($conn, $companyId, $enquiryId, WA_TEMPLATE_ENQUIRY_THANKYOU, $waSent);
 
     // Send Push Notifications
     sendPushNotification($companyId, "New " . ucfirst($enquiry_type) . " Enquiry", "From $name - $phone", "/view-leads.php", "new_enquiry");
