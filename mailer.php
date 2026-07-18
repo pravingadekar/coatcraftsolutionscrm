@@ -285,6 +285,24 @@ function sendQuoteFollowupWhatsApp(string $phone, string $name, string $tenantNa
     }
 }
 
+/* Sends the WhatsApp missed-call thank-you template, triggered by
+   missed-call-sms.php's MacroDroid webhook when a call to the business
+   number goes unanswered. No caller name is known at that point, so the
+   template carries no variables. Best-effort like the other WhatsApp
+   senders. */
+function sendMissedCallWhatsApp(string $phone): bool {
+    $recipient = normalizeIndianPhoneForSms($phone);
+    if ($recipient === null) {
+        return false;
+    }
+    try {
+        return sendViaWhatsAppCloudApi($recipient, WA_TEMPLATE_MISSED_CALL, WA_TEMPLATE_LANG, []);
+    } catch (\Throwable $e) {
+        error_log('sendMissedCallWhatsApp failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
 /* Returns an <img> tag pointing at the tenant logo's public URL (if the
    file exists locally), suitable for embedding in HTML email bodies. Links
    to SITE_URL rather than base64-embedding the file — embedding pushed

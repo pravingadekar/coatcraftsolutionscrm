@@ -84,6 +84,7 @@ define('WA_TEMPLATE_LANG', 'en');
 define('WA_TEMPLATE_ENQUIRY_THANKYOU', 'enquiry_thank_you');
 define('WA_TEMPLATE_SITE_VISIT', 'site_visit_confirmation');
 define('WA_TEMPLATE_QUOTE_FOLLOWUP', 'quote_followup');
+define('WA_TEMPLATE_MISSED_CALL', 'missed_call_thankyou_coatcraft');
 
 // Incoming-message webhook (whatsapp-webhook.php). WA_WEBHOOK_VERIFY_TOKEN is
 // a random string you choose and paste into Meta's Webhook config (App >

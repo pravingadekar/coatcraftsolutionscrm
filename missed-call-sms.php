@@ -51,15 +51,24 @@ if (!$tenant || empty($tenant['form_token'])) {
     jsonExit(false, 'Tenant not found or no form token', 404);
 }
 
-$formUrl   = SITE_URL . '/lead-form.php?t=' . urlencode($tenant['form_token']);
-$company   = $tenant['company_display_name'] ?: 'CoatCraft Solutions';
+// SMS temporarily disabled: Brevo requires a registered Sender ID for India,
+// which isn't set up yet — sending would just burn credits showing a random
+// number instead of "CoatCraft". Re-enable once the Sender ID is approved by
+// uncommenting the block below.
+// $message = "CoatCraft Solutions\n\n"
+//     . "Hello! Thank you for contacting CoatCraft Solutions.\n\n"
+//     . "To help us assist you better, please select the appropriate enquiry form:\n\n"
+//     . "Industrial Flooring Enquiry: https://coatcraftcrm.workmanager.in/enquiry.html\n\n"
+//     . "Residential Flooring Enquiry: https://coatcraftcrm.workmanager.in/residential-enquiry.html\n\n"
+//     . "Once we receive your enquiry, our team will review your requirements and get in touch with you as soon as possible.\n\n"
+//     . "Need immediate assistance? Call us: +91 77458 89111\n\n"
+//     . "Thank you for choosing CoatCraft Solutions.";
+// sendViaBrevoSms($caller, $message); // best-effort; counts as multiple SMS credits since it's long
 
-$message = "Hi! We missed your call from $company. Share your requirements here: $formUrl  Callback: +917745889111";
-
-$sent = sendViaBrevoSms($caller, $message);
+$sent = sendMissedCallWhatsApp($caller);
 
 if ($sent) {
-    jsonExit(true, 'SMS sent to ' . $caller);
+    jsonExit(true, 'WhatsApp sent to ' . $caller);
 } else {
-    jsonExit(false, 'Brevo SMS failed — check server error log', 500);
+    jsonExit(false, 'WhatsApp send failed — check server error log', 500);
 }
