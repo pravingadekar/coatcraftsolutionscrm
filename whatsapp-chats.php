@@ -3,17 +3,29 @@ require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/leads.php';
 
 $conversations = getWhatsAppConversations($conn, $companyId);
+$unknownConversations = getUnknownWhatsAppConversations($conn, $companyId);
 
 $activeLeadId = isset($_GET['id']) ? intval($_GET['id']) : 0;
+$activePhone = isset($_GET['phone']) ? preg_replace('/\D/', '', $_GET['phone']) : '';
 $activeLead = null;
 $thread = [];
+$chatTitle = '';
+$chatSubtitle = '';
 if ($activeLeadId > 0) {
     $activeLead = getLeadById($conn, $companyId, $activeLeadId);
     if ($activeLead) {
         $thread = getWhatsAppThread($conn, $companyId, $activeLeadId);
         markWhatsAppRead($conn, $companyId, $activeLeadId);
+        $chatTitle = $activeLead['name'];
+        $chatSubtitle = $activeLead['phone'];
     }
+} elseif ($activePhone !== '') {
+    $thread = getWhatsAppThreadByPhone($conn, $companyId, $activePhone);
+    markWhatsAppReadByPhone($conn, $companyId, $activePhone);
+    $chatTitle = $activePhone;
+    $chatSubtitle = 'New number (no lead yet)';
 }
+$hasActiveChat = $activeLead !== null || $activePhone !== '';
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -86,14 +98,36 @@ body{margin:0;font-family:'Poppins',sans-serif;background:var(--bg);color:#1f293
                 </a>
             <?php endforeach; ?>
         <?php endif; ?>
+
+        <h3 style="margin-top:18px;">New numbers</h3>
+        <?php if (empty($unknownConversations)): ?>
+            <div class="conv-empty">No new numbers yet.</div>
+        <?php else: ?>
+            <?php foreach ($unknownConversations as $conv): ?>
+                <a class="conv-item <?= $activePhone !== '' && $activePhone === preg_replace('/\D/', '', $conv['phone']) ? 'active' : '' ?>" href="?phone=<?= urlencode($conv['phone']) ?>">
+                    <div class="conv-name">
+                        <span><?= htmlspecialchars($conv['phone']) ?></span>
+                        <?php if ((int)$conv['unread_count'] > 0): ?>
+                            <span class="unread-dot"><?= intval($conv['unread_count']) ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="conv-preview"><?= htmlspecialchars($conv['last_message']) ?></div>
+                    <div class="conv-time"><?= date('d M Y, g:i A', strtotime($conv['last_received_at'])) ?></div>
+                </a>
+            <?php endforeach; ?>
+        <?php endif; ?>
     </div>
     <div class="chat-pane">
-        <?php if ($activeLead): ?>
+        <?php if ($hasActiveChat): ?>
             <div class="chat-header">
-                <div class="avatar"><?= strtoupper(substr($activeLead['name'], 0, 1)) ?></div>
+                <?php if ($activeLead): ?>
+                    <div class="avatar"><?= strtoupper(substr($activeLead['name'], 0, 1)) ?></div>
+                <?php else: ?>
+                    <div class="avatar"><i class="fa-solid fa-user"></i></div>
+                <?php endif; ?>
                 <div>
-                    <h3><?= htmlspecialchars($activeLead['name']) ?></h3>
-                    <p><?= htmlspecialchars($activeLead['phone']) ?></p>
+                    <h3><?= htmlspecialchars($chatTitle) ?></h3>
+                    <p><?= htmlspecialchars($chatSubtitle) ?></p>
                 </div>
             </div>
             <div class="chat-body">

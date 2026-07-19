@@ -86,6 +86,51 @@ define('WA_TEMPLATE_SITE_VISIT', 'site_visit_confirmation');
 define('WA_TEMPLATE_QUOTE_FOLLOWUP', 'quote_followup');
 define('WA_TEMPLATE_MISSED_CALL', 'missed_call_thankyou_coatcraft');
 
+// Rule-based WhatsApp FAQ bot (whatsapp-webhook.php) — canned replies sent to
+// unknown numbers (no matching CRM lead) based on simple keyword matching.
+// Sent as free-form text within Meta's 24h customer-service window, so these
+// are NOT real Meta templates and need no approval — edit directly to change.
+define('WA_BOT_REPLY_PRICING',
+    "CoatCraft Solutions - Approximate Pricing (per sq.ft):\n\n" .
+    "🏠 Residential Flooring: Starting ₹300/sqft\n" .
+    "🏭 Industrial Epoxy: 2mm - ₹60, 3mm - ₹70, 4mm - ₹80, 5mm - ₹90\n" .
+    "🎨 3D Epoxy: ₹350/sqft\n" .
+    "🖨️ Digital Paper Epoxy: ₹350/sqft\n\n" .
+    "*Final price depends on a free site visit & survey.\n" .
+    "📞 Call/WhatsApp: +91 77458 89111"
+);
+define('WA_BOT_REPLY_SERVICES',
+    "CoatCraft Solutions - Our Services:\n\n" .
+    "• Epoxy Flooring (Industrial, Metallic, 3D, Digital Paper, Italian Marble, Flakes)\n" .
+    "• PU Flooring & PU Concrete\n" .
+    "• ESD / Anti-Static Flooring\n" .
+    "• Car Parking Flooring\n" .
+    "• Chemical Resistant Flooring\n" .
+    "• Epoxy Waterproofing\n" .
+    "• Wall Coating & Coving\n" .
+    "• Floor Repair & Refurbishment\n" .
+    "• Epoxy Table Tops & Frames\n\n" .
+    "📞 For details: +91 77458 89111 | 🌐 www.coatcraftsolutions.com"
+);
+define('WA_BOT_REPLY_WARRANTY',
+    "CoatCraft Solutions flooring systems come with up to 2 years warranty (subject to terms & maintenance guidelines).\n\n" .
+    "For warranty details specific to your project, call/WhatsApp us: +91 77458 89111"
+);
+define('WA_BOT_REPLY_FALLBACK',
+    "Thank you for messaging CoatCraft Solutions! 🙂 Our team will get back to you shortly.\n\n" .
+    "You can also reply 1 for Pricing, 2 for Services, 3 for Warranty — or call/WhatsApp +91 77458 89111 for immediate assistance."
+);
+// Sent on a phone's very first-ever inbound message, regardless of what they
+// typed (even "hi") — so they see the menu before anything else.
+define('WA_BOT_REPLY_MENU',
+    "Welcome to CoatCraft Solutions! 👋\n\n" .
+    "Please reply with a number, or just type your question:\n\n" .
+    "1️⃣ Pricing\n" .
+    "2️⃣ Services\n" .
+    "3️⃣ Warranty\n\n" .
+    "📞 Or call/WhatsApp us anytime: +91 77458 89111"
+);
+
 // Incoming-message webhook (whatsapp-webhook.php). WA_WEBHOOK_VERIFY_TOKEN is
 // a random string you choose and paste into Meta's Webhook config (App >
 // WhatsApp > Configuration) — Meta echoes it back on setup to prove you own

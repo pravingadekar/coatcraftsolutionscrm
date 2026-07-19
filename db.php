@@ -151,6 +151,46 @@ if (!$hasIsReadColumn) {
     $conn->query("ALTER TABLE whatsapp_inbound_messages ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 0 AFTER message_body");
 }
 
+// Append-only log of the rule-based WhatsApp bot's replies (whatsapp-webhook.php)
+// — lets whatsapp-chats.php show what the bot told each number, alongside
+// their inbound messages. Also doubles as the "have we ever replied to this
+// phone before" marker that decides whether the next inbound message gets
+// the welcome menu or a keyword-matched answer.
+$conn->query("CREATE TABLE IF NOT EXISTS whatsapp_bot_replies (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    reply_body TEXT NOT NULL,
+    sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_company_phone (company_id, phone)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+// enquiry_id lets a bot reply be linked to a known lead (added after the
+// table above already existed in production once known-lead numbers were
+// also allowed to get bot replies) — idempotent ALTER, same pattern as the
+// whatsapp_inbound_messages.is_read column above.
+$hasBotReplyEnquiryIdColumn = $conn->query(
+    "SELECT COUNT(*) c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'whatsapp_bot_replies' AND COLUMN_NAME = 'enquiry_id'"
+)->fetch_assoc()['c'] > 0;
+if (!$hasBotReplyEnquiryIdColumn) {
+    $conn->query("ALTER TABLE whatsapp_bot_replies ADD COLUMN enquiry_id INT DEFAULT NULL AFTER phone");
+}
+
+// Rate-limits missed-call-sms.php's WhatsApp send per caller: up to 2 sends
+// per 30-day cycle (see shouldSendMissedCallMessage() in leads.php), so a
+// number that calls repeatedly in one day — or an already-converted customer
+// calling often for payment/work coordination — doesn't get the "please
+// enquire" message every single time they call.
+$conn->query("CREATE TABLE IF NOT EXISTS missed_call_message_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    cycle_started_at DATETIME NOT NULL,
+    send_count INT NOT NULL DEFAULT 0,
+    UNIQUE KEY unique_company_phone (company_id, phone)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 // Daily notes table
 $conn->query("CREATE TABLE IF NOT EXISTS daily_notes (
     id INT AUTO_INCREMENT PRIMARY KEY,

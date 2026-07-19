@@ -303,6 +303,81 @@ function sendMissedCallWhatsApp(string $phone): bool {
     }
 }
 
+/* Sends a free-form ("session") WhatsApp text message via the Meta Cloud API.
+   Unlike sendViaWhatsAppCloudApi()'s template-based sends, this only works
+   within the 24h window after the customer's own last inbound message —
+   Meta rejects it otherwise. Used by the rule-based FAQ bot below, which
+   always sends synchronously inside the webhook that just received that
+   inbound message, so it's always within-window by construction. Returns
+   true on a 2xx response from Meta. */
+function sendViaWhatsAppCloudApiText(string $toDigits, string $body): bool {
+    $payload = [
+        'messaging_product' => 'whatsapp',
+        'to' => $toDigits,
+        'type' => 'text',
+        'text' => ['body' => $body],
+    ];
+
+    $ch = curl_init('https://graph.facebook.com/' . WA_API_VERSION . '/' . WA_PHONE_NUMBER_ID . '/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . WA_ACCESS_TOKEN,
+            'Content-Type: application/json',
+        ],
+        CURLOPT_POSTFIELDS => json_encode($payload),
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpCode >= 200 && $httpCode < 300) {
+        return true;
+    }
+    error_log('WhatsApp Cloud API text send failed: HTTP ' . $httpCode . ' ' . ($curlError ?: $response));
+    return false;
+}
+
+/* Rule-based keyword router for the WhatsApp FAQ bot — no AI/LLM, just
+   simple substring matching against a handful of topics staff used to get
+   asked about on calls (price, services, warranty). Falls back to a generic
+   acknowledgment when nothing matches. Pure function, easy to extend. */
+function resolveWhatsAppBotReply(string $messageBody): string {
+    $body = trim(mb_strtolower($messageBody));
+    // Numeric choices match the numbered menu in WA_BOT_REPLY_MENU (1/2/3),
+    // sent on a phone's first-ever contact — keep both in sync if changed.
+    if ($body === '1' || preg_match('/\b(price|rate|cost|charge|quote|kitna)\b/u', $body)) {
+        return WA_BOT_REPLY_PRICING;
+    }
+    if ($body === '2' || preg_match('/\b(service|services|offer|types)\b/u', $body)) {
+        return WA_BOT_REPLY_SERVICES;
+    }
+    if ($body === '3' || preg_match('/\b(warranty|guarantee)\b/u', $body)) {
+        return WA_BOT_REPLY_WARRANTY;
+    }
+    return WA_BOT_REPLY_FALLBACK;
+}
+
+/* Sends the rule-based bot's reply text (already resolved by the caller —
+   either WA_BOT_REPLY_MENU for a phone's first-ever contact, or
+   resolveWhatsAppBotReply()'s keyword/number match otherwise). Best-effort
+   like the other WhatsApp senders. */
+function sendWhatsAppBotReply(string $phone, string $replyText): bool {
+    $recipient = normalizeIndianPhoneForSms($phone);
+    if ($recipient === null) {
+        return false;
+    }
+    try {
+        return sendViaWhatsAppCloudApiText($recipient, $replyText);
+    } catch (\Throwable $e) {
+        error_log('sendWhatsAppBotReply failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
 /* Returns an <img> tag pointing at the tenant logo's public URL (if the
    file exists locally), suitable for embedding in HTML email bodies. Links
    to SITE_URL rather than base64-embedding the file — embedding pushed

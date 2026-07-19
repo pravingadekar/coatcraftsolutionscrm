@@ -10,6 +10,7 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/mailer.php';
+require_once __DIR__ . '/leads.php';
 
 header('Content-Type: application/json');
 
@@ -49,6 +50,10 @@ $stmt->close();
 
 if (!$tenant || empty($tenant['form_token'])) {
     jsonExit(false, 'Tenant not found or no form token', 404);
+}
+
+if (!shouldSendMissedCallMessage($conn, $companyId, $caller)) {
+    jsonExit(true, 'Skipped — already sent twice this 30-day cycle for ' . $caller);
 }
 
 // SMS temporarily disabled: Brevo requires a registered Sender ID for India,

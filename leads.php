@@ -284,6 +284,14 @@ function getWhatsAppThread(mysqli $conn, int $companyId, int $leadId): array {
     }
     $stmt->close();
 
+    $stmt = $conn->prepare("SELECT reply_body, sent_at FROM whatsapp_bot_replies WHERE enquiry_id=? AND company_id=? ORDER BY sent_at ASC");
+    $stmt->bind_param('ii', $leadId, $companyId);
+    $stmt->execute();
+    foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+        $thread[] = ['direction' => 'out', 'body' => $row['reply_body'], 'at' => $row['sent_at']];
+    }
+    $stmt->close();
+
     usort($thread, fn($a, $b) => strtotime($a['at']) <=> strtotime($b['at']));
     return $thread;
 }
@@ -291,6 +299,126 @@ function getWhatsAppThread(mysqli $conn, int $companyId, int $leadId): array {
 function markWhatsAppRead(mysqli $conn, int $companyId, int $leadId): void {
     $stmt = $conn->prepare("UPDATE whatsapp_inbound_messages SET is_read=1 WHERE enquiry_id=? AND company_id=?");
     $stmt->bind_param('ii', $leadId, $companyId);
+    $stmt->execute();
+    $stmt->close();
+}
+
+// Records one rule-based bot reply (whatsapp-webhook.php), so it can be
+// shown alongside the inbound message it answered on whatsapp-chats.php.
+// $enquiryId is null for numbers with no matching lead.
+function logWhatsAppBotReply(mysqli $conn, int $companyId, string $phone, string $replyBody, ?int $enquiryId = null): void {
+    $stmt = $conn->prepare("INSERT INTO whatsapp_bot_replies (company_id, phone, enquiry_id, reply_body, sent_at) VALUES (?, ?, ?, ?, NOW())");
+    $stmt->bind_param('isis', $companyId, $phone, $enquiryId, $replyBody);
+    $stmt->execute();
+    $stmt->close();
+}
+
+// Decides whether missed-call-sms.php should send its WhatsApp message for
+// this call, and records the decision. Rule: up to 2 sends per 30-day cycle
+// per (company, phone) — the 1st and 2nd call in a cycle each get a message,
+// further calls within the same 30 days are silently skipped, and once 30
+// days have passed since the cycle started, the next call starts a fresh
+// cycle (treated like a brand new enquiry). This keeps same-day repeat
+// callers from being spammed, and stops nagging an already-converted
+// customer who calls often for payment/work coordination.
+function shouldSendMissedCallMessage(mysqli $conn, int $companyId, string $phone): bool {
+    $stmt = $conn->prepare("SELECT cycle_started_at, send_count FROM missed_call_message_log WHERE company_id=? AND phone=?");
+    $stmt->bind_param('is', $companyId, $phone);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if ($row === null) {
+        $stmt = $conn->prepare("INSERT INTO missed_call_message_log (company_id, phone, cycle_started_at, send_count) VALUES (?, ?, NOW(), 1)");
+        $stmt->bind_param('is', $companyId, $phone);
+        $stmt->execute();
+        $stmt->close();
+        return true;
+    }
+
+    $daysSinceCycleStart = (new DateTime($row['cycle_started_at']))->diff(new DateTime())->days;
+
+    if ($daysSinceCycleStart >= 30) {
+        $stmt = $conn->prepare("UPDATE missed_call_message_log SET cycle_started_at = NOW(), send_count = 1 WHERE company_id=? AND phone=?");
+        $stmt->bind_param('is', $companyId, $phone);
+        $stmt->execute();
+        $stmt->close();
+        return true;
+    }
+
+    if ((int)$row['send_count'] < 2) {
+        $stmt = $conn->prepare("UPDATE missed_call_message_log SET send_count = send_count + 1 WHERE company_id=? AND phone=?");
+        $stmt->bind_param('is', $companyId, $phone);
+        $stmt->execute();
+        $stmt->close();
+        return true;
+    }
+
+    return false;
+}
+
+// Whether the bot has ever replied to this phone before, for this company —
+// decides whether the next inbound message from them gets the welcome menu
+// (first contact) or a keyword-matched answer (they've seen the menu already).
+function hasWhatsAppBotRepliedBefore(mysqli $conn, int $companyId, string $phone): bool {
+    $stmt = $conn->prepare("SELECT COUNT(*) c FROM whatsapp_bot_replies WHERE company_id=? AND phone=?");
+    $stmt->bind_param('is', $companyId, $phone);
+    $stmt->execute();
+    $count = (int)$stmt->get_result()->fetch_assoc()['c'];
+    $stmt->close();
+    return $count > 0;
+}
+
+// getWhatsAppConversations()'s counterpart for numbers with NO matching lead
+// yet (enquiry_id IS NULL) — these are invisible to getWhatsAppConversations()
+// since it INNER JOINs enquiries, so without this the rule-based bot's
+// conversations would never show up anywhere on whatsapp-chats.php.
+function getUnknownWhatsAppConversations(mysqli $conn, int $companyId): array {
+    $stmt = $conn->prepare(
+        "SELECT m.phone,
+                m.message_body AS last_message, m.received_at AS last_received_at,
+                (SELECT COUNT(*) FROM whatsapp_inbound_messages m2 WHERE m2.phone = m.phone AND m2.company_id = m.company_id AND m2.enquiry_id IS NULL AND m2.is_read = 0) AS unread_count
+         FROM whatsapp_inbound_messages m
+         WHERE m.company_id = ? AND m.enquiry_id IS NULL AND m.id = (
+             SELECT MAX(m3.id) FROM whatsapp_inbound_messages m3 WHERE m3.phone = m.phone AND m3.company_id = m.company_id AND m3.enquiry_id IS NULL
+         )
+         ORDER BY m.received_at DESC"
+    );
+    $stmt->bind_param('i', $companyId);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $rows;
+}
+
+// getWhatsAppThread()'s counterpart for an unknown number — merges inbound
+// messages with the bot's own logged replies into one chronological thread.
+function getWhatsAppThreadByPhone(mysqli $conn, int $companyId, string $phone): array {
+    $thread = [];
+
+    $stmt = $conn->prepare("SELECT message_body, received_at FROM whatsapp_inbound_messages WHERE phone=? AND company_id=? AND enquiry_id IS NULL ORDER BY received_at ASC");
+    $stmt->bind_param('si', $phone, $companyId);
+    $stmt->execute();
+    foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+        $thread[] = ['direction' => 'in', 'body' => $row['message_body'], 'at' => $row['received_at']];
+    }
+    $stmt->close();
+
+    $stmt = $conn->prepare("SELECT reply_body, sent_at FROM whatsapp_bot_replies WHERE phone=? AND company_id=? ORDER BY sent_at ASC");
+    $stmt->bind_param('si', $phone, $companyId);
+    $stmt->execute();
+    foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+        $thread[] = ['direction' => 'out', 'body' => $row['reply_body'], 'at' => $row['sent_at']];
+    }
+    $stmt->close();
+
+    usort($thread, fn($a, $b) => strtotime($a['at']) <=> strtotime($b['at']));
+    return $thread;
+}
+
+function markWhatsAppReadByPhone(mysqli $conn, int $companyId, string $phone): void {
+    $stmt = $conn->prepare("UPDATE whatsapp_inbound_messages SET is_read=1 WHERE phone=? AND company_id=? AND enquiry_id IS NULL");
+    $stmt->bind_param('si', $phone, $companyId);
     $stmt->execute();
     $stmt->close();
 }

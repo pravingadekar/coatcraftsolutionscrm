@@ -8,6 +8,7 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/leads.php';
+require_once __DIR__ . '/mailer.php';
 
 // Meta's one-time verification handshake when the webhook URL is first
 // saved in the App dashboard — echo hub_challenge back only if our verify
@@ -40,8 +41,8 @@ if ($signatureHeader === '' || !hash_equals($expectedSignature, $signatureHeader
 
 // Answer 200 immediately from here on — Meta retries (and can eventually
 // disable) the webhook subscription if it sees slow/non-2xx responses, so
-// this endpoint only ever does a fast DB insert, nothing else (no outbound
-// calls, no auto-replies).
+// aside from the rule-based bot reply below (a single, fast, synchronous
+// curl call), this endpoint only does DB work.
 http_response_code(200);
 header('Content-Type: application/json');
 
@@ -58,7 +59,23 @@ foreach (($payload['entry'] ?? []) as $entry) {
             }
             $body = $message['text']['body'] ?? ('[' . ($message['type'] ?? 'unsupported') . ' message]');
             $enquiryId = findLeadIdByPhone($conn, $companyId, $from);
-            logWhatsAppInbound($conn, $companyId, $enquiryId, $from, $waMessageId, $body);
+            $isNewInboundMessage = logWhatsAppInbound($conn, $companyId, $enquiryId, $from, $waMessageId, $body);
+
+            // Rule-based FAQ bot: replies to every inbound message (known
+            // leads included, per explicit user request) — staff can still
+            // reply manually on top of this via whatsapp-chats.php. On a
+            // phone's very first-ever contact, always send the menu
+            // (regardless of what they typed); after that, match their
+            // reply against the menu numbers/keywords. $isNewInboundMessage
+            // guards against Meta retrying webhook delivery of the same
+            // message re-firing this.
+            if ($isNewInboundMessage) {
+                $isFirstBotContact = !hasWhatsAppBotRepliedBefore($conn, $companyId, $from);
+                $replyText = $isFirstBotContact ? WA_BOT_REPLY_MENU : resolveWhatsAppBotReply($body);
+                if (sendWhatsAppBotReply($from, $replyText)) {
+                    logWhatsAppBotReply($conn, $companyId, $from, $replyText, $enquiryId);
+                }
+            }
         }
         // Status updates (sent/delivered/read/failed) also arrive here via
         // $change['value']['statuses'] — intentionally ignored, only actual
