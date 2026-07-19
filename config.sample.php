@@ -139,3 +139,10 @@ define('WA_BOT_REPLY_MENU',
 // incoming webhook call, so a spoofed request can't inject fake messages.
 define('WA_WEBHOOK_VERIFY_TOKEN', 'CHANGE_ME');
 define('WA_APP_SECRET', 'CHANGE_ME');
+
+// Google Gemini API (generativelanguage.googleapis.com) — powers the
+// WhatsApp bot's "Talk to AI Expert" free-form flooring consultation
+// (whatsapp-bot-ai.php). Free tier, get a key from
+// https://aistudio.google.com/apikey (no card required).
+define('GEMINI_API_KEY', 'CHANGE_ME');
+define('GEMINI_MODEL', 'gemini-3.5-flash');

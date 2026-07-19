@@ -20,6 +20,7 @@ require_once __DIR__ . '/mailer.php';
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/push-config.php';
 require_once __DIR__ . '/whatsapp-bot-content.php';
+require_once __DIR__ . '/whatsapp-bot-ai.php';
 require_once __DIR__ . '/whatsapp-bot-router.php';
 
 // Meta's one-time verification handshake when the webhook URL is first

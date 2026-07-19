@@ -30,6 +30,9 @@ function routeWhatsAppBotMessage(mysqli $conn, int $companyId, string $from, arr
         case 'welcome_sent':
             waBotRouteWelcomeSent($conn, $companyId, $from, $interactiveId, $body, $enquiryId);
             return;
+        case 'ai_consult':
+            waBotRouteAiConsult($conn, $companyId, $from, $interactiveId, $body, $context, $enquiryId);
+            return;
         case 'welcome':
         default:
             waBotSendWelcomeMenu($conn, $companyId, $from, $enquiryId);
@@ -95,11 +98,10 @@ function waBotRouteWelcomeSent(mysqli $conn, int $companyId, string $from, ?stri
             updateWhatsAppBotSession($conn, $companyId, $from, 'welcome_sent', []);
             return;
         case 'menu:ai_expert':
-            captureWhatsAppBotInterest($conn, $companyId, $from, $enquiryId, 'WhatsApp bot: requested AI Expert (stubbed to human handoff)');
-            $reply = "Our expert will personally assist you shortly. 🙂";
+            captureWhatsAppBotInterest($conn, $companyId, $from, $enquiryId, 'WhatsApp bot: started AI Expert consultation');
+            $reply = "Hi! I'm CoatCraft's AI flooring assistant 🤖 Ask me anything about our services, pricing, or which flooring suits your needs.\n\nType *human* anytime to talk to our team instead.";
             waBotSendAndLog($conn, $companyId, $from, $enquiryId, sendWhatsAppBotReply($from, $reply), $reply);
-            pauseWhatsAppBot($conn, $companyId, $from, 'bot:ai_expert_stub');
-            updateWhatsAppBotSession($conn, $companyId, $from, 'human_handoff', []);
+            updateWhatsAppBotSession($conn, $companyId, $from, 'ai_consult', ['ai_history' => []]);
             return;
         case 'menu:human_expert':
             captureWhatsAppBotInterest($conn, $companyId, $from, $enquiryId, 'WhatsApp bot: requested Human Expert');
@@ -308,6 +310,44 @@ function waBotRouteServiceDetail(mysqli $conn, int $companyId, string $from, ?st
         return;
     }
     waBotFallbackToKeywordReply($conn, $companyId, $from, $body, $enquiryId);
+}
+
+// --- Stage 5: AI Expert consultation (Gemini) -----------------------------
+
+// Any inbound message while stage is 'ai_consult'. A plain "human" (or
+// similar) request, or a Gemini call failure, both hand off to a human the
+// same way menu:human_expert does — the customer is never left stuck with
+// an AI that can't help and no visible way out.
+function waBotRouteAiConsult(mysqli $conn, int $companyId, string $from, ?string $interactiveId, string $body, array $context, ?int $enquiryId): void {
+    $trimmed = trim($body);
+
+    if (preg_match('/\b(human|agent|representative|staff|real person|talk to (a )?person|call me)\b/i', $trimmed)) {
+        $reply = "Sure! Connecting you to our team — they'll be with you shortly. 🙂";
+        waBotSendAndLog($conn, $companyId, $from, $enquiryId, sendWhatsAppBotReply($from, $reply), $reply);
+        pauseWhatsAppBot($conn, $companyId, $from, 'bot:ai_expert_handoff');
+        updateWhatsAppBotSession($conn, $companyId, $from, 'human_handoff', []);
+        return;
+    }
+
+    $history = $context['ai_history'] ?? [];
+    $aiReply = callGeminiConsult($history, $trimmed);
+
+    if ($aiReply === null) {
+        $reply = "Sorry, I'm having trouble right now 🙏 Connecting you to our team instead.";
+        waBotSendAndLog($conn, $companyId, $from, $enquiryId, sendWhatsAppBotReply($from, $reply), $reply);
+        pauseWhatsAppBot($conn, $companyId, $from, 'bot:ai_expert_failure');
+        updateWhatsAppBotSession($conn, $companyId, $from, 'human_handoff', []);
+        return;
+    }
+
+    waBotSendAndLog($conn, $companyId, $from, $enquiryId, sendWhatsAppBotReply($from, $aiReply), $aiReply);
+
+    $history[] = ['role' => 'user', 'text' => $trimmed];
+    $history[] = ['role' => 'model', 'text' => $aiReply];
+    if (count($history) > WA_BOT_AI_MAX_HISTORY) {
+        $history = array_slice($history, -WA_BOT_AI_MAX_HISTORY);
+    }
+    updateWhatsAppBotSession($conn, $companyId, $from, 'ai_consult', ['ai_history' => $history]);
 }
 
 // Shared fallback for free-text input received while inside the menu tree
