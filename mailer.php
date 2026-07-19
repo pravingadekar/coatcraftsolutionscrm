@@ -304,13 +304,20 @@ function sendMissedCallWhatsApp(string $phone): bool {
 }
 
 /* Sends a free-form ("session") WhatsApp text message via the Meta Cloud API.
-   Unlike sendViaWhatsAppCloudApi()'s template-based sends, this only works
-   within the 24h window after the customer's own last inbound message —
-   Meta rejects it otherwise. Used by the rule-based FAQ bot below, which
-   always sends synchronously inside the webhook that just received that
-   inbound message, so it's always within-window by construction. Returns
-   true on a 2xx response from Meta. */
-function sendViaWhatsAppCloudApiText(string $toDigits, string $body): bool {
+   Unlike sendViaWhatsAppCloudApi()'s template-based sends, this is only
+   supposed to be used within the 24h window after the customer's own last
+   inbound message — BUT confirmed via a live test that Meta does NOT reject
+   a 24h-window violation synchronously: it accepts the request (HTTP 200 +
+   a message id) even for a phone that has never messaged in at all, and only
+   reports the real delivery failure later via an async status callback (see
+   the `statuses` handling in whatsapp-webhook.php). So a true 2xx here means
+   "Meta accepted the request", not "the customer will receive it" — callers
+   that need to know real delivery status must track the returned message id
+   and watch for a later status update, which is exactly what
+   sendManualWhatsAppReply() (leads.php) does via the optional $outMessageId
+   param below. Used synchronously by the rule-based FAQ bot too, where this
+   distinction doesn't matter (no delivery-status UI to update there). */
+function sendViaWhatsAppCloudApiText(string $toDigits, string $body, ?string &$outMessageId = null): bool {
     $payload = [
         'messaging_product' => 'whatsapp',
         'to' => $toDigits,
@@ -335,6 +342,8 @@ function sendViaWhatsAppCloudApiText(string $toDigits, string $body): bool {
     curl_close($ch);
 
     if ($httpCode >= 200 && $httpCode < 300) {
+        $decoded = json_decode($response, true);
+        $outMessageId = $decoded['messages'][0]['id'] ?? null;
         return true;
     }
     error_log('WhatsApp Cloud API text send failed: HTTP ' . $httpCode . ' ' . ($curlError ?: $response));

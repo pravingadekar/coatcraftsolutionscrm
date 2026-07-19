@@ -110,6 +110,7 @@ body{margin:0;font-family:'Poppins',sans-serif;background:var(--bg);color:#1f293
 .chat-body{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:10px;background:#e9edf2;}
 .bubble{max-width:60%;padding:10px 14px;border-radius:14px;font-size:14px;line-height:1.5;box-shadow:0 2px 6px rgba(15,23,42,.06);}
 .bubble .bubble-time{display:block;font-size:10.5px;color:#94a3b8;margin-top:4px;}
+.bubble .bubble-failed{display:block;font-size:11px;color:#b91c1c;font-weight:600;margin-top:4px;}
 .bubble.in{align-self:flex-start;background:#fff;border-bottom-left-radius:4px;}
 .bubble.out{align-self:flex-end;background:#dcf8c6;border-bottom-right-radius:4px;}
 .chat-placeholder{flex:1;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:15px;flex-direction:column;gap:12px;}
@@ -192,6 +193,9 @@ body{margin:0;font-family:'Poppins',sans-serif;background:var(--bg);color:#1f293
                         <div class="bubble <?= $msg['direction'] ?>">
                             <?= nl2br(htmlspecialchars($msg['body'])) ?>
                             <span class="bubble-time"><?= date('d M Y, g:i A', strtotime($msg['at'])) ?></span>
+                            <?php if (($msg['delivery_status'] ?? null) === 'failed'): ?>
+                                <span class="bubble-failed"><i class="fa-solid fa-triangle-exclamation"></i> Not delivered<?= !empty($msg['error_message']) ? ' — ' . htmlspecialchars($msg['error_message']) : '' ?></span>
+                            <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>

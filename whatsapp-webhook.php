@@ -99,9 +99,27 @@ foreach (($payload['entry'] ?? []) as $entry) {
                 routeWhatsAppBotMessage($conn, $companyId, $from, $session, $interactiveId, $body, $enquiryId);
             }
         }
-        // Status updates (sent/delivered/read/failed) also arrive here via
-        // $change['value']['statuses'] — intentionally ignored, only actual
-        // customer replies are stored.
+        // Delivery status updates (sent/delivered/read/failed) for messages
+        // WE sent. Only manual staff replies (whatsapp_staff_replies) track a
+        // wa_message_id to match against — bot replies/templates don't, so
+        // this is a no-op for those (Meta sends a status callback for every
+        // outbound message, not just manual ones). This exists specifically
+        // because Meta accepts a free-text send synchronously (2xx) even when
+        // it's outside the customer's 24h reply window, and only reports the
+        // real failure here — without this, a staff member has no way to
+        // know their reply silently never arrived.
+        foreach (($change['value']['statuses'] ?? []) as $status) {
+            $statusMessageId = $status['id'] ?? '';
+            $statusValue = $status['status'] ?? '';
+            if ($statusMessageId === '' || $statusValue === '') {
+                continue;
+            }
+            $errorMessage = null;
+            if ($statusValue === 'failed' && isset($status['errors'][0])) {
+                $errorMessage = $status['errors'][0]['title'] ?? ($status['errors'][0]['message'] ?? 'Delivery failed');
+            }
+            updateWhatsAppStaffReplyDeliveryStatus($conn, $statusMessageId, $statusValue, $errorMessage);
+        }
     }
 }
 

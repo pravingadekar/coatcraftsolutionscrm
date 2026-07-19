@@ -230,6 +230,26 @@ $conn->query("CREATE TABLE IF NOT EXISTS whatsapp_staff_replies (
     INDEX idx_company_phone (company_id, phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+// wa_message_id/delivery_status/error_message let whatsapp-webhook.php's
+// status-callback handling (see the `statuses` loop there) retroactively mark
+// a manual staff reply as delivered/failed — Meta accepts a free-text send
+// synchronously even when it's outside the customer's 24h reply window, and
+// only reports that failure later via an async status callback, so without
+// this a staff member has no way to know their reply silently never arrived.
+// Added via idempotent ALTER (checked via information_schema) since this
+// table already existed in production before these columns were added, same
+// pattern as whatsapp_bot_replies.enquiry_id / whatsapp_inbound_messages.is_read.
+$hasStaffReplyMessageIdColumn = $conn->query(
+    "SELECT COUNT(*) c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'whatsapp_staff_replies' AND COLUMN_NAME = 'wa_message_id'"
+)->fetch_assoc()['c'] > 0;
+if (!$hasStaffReplyMessageIdColumn) {
+    $conn->query("ALTER TABLE whatsapp_staff_replies ADD COLUMN wa_message_id VARCHAR(100) DEFAULT NULL AFTER reply_body");
+    $conn->query("ALTER TABLE whatsapp_staff_replies ADD COLUMN delivery_status VARCHAR(20) NOT NULL DEFAULT 'sent' AFTER wa_message_id");
+    $conn->query("ALTER TABLE whatsapp_staff_replies ADD COLUMN error_message VARCHAR(255) DEFAULT NULL AFTER delivery_status");
+    $conn->query("ALTER TABLE whatsapp_staff_replies ADD INDEX idx_wa_message_id (wa_message_id)");
+}
+
 // Daily notes table
 $conn->query("CREATE TABLE IF NOT EXISTS daily_notes (
     id INT AUTO_INCREMENT PRIMARY KEY,

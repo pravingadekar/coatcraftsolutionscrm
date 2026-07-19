@@ -292,11 +292,11 @@ function getWhatsAppThread(mysqli $conn, int $companyId, int $leadId): array {
     }
     $stmt->close();
 
-    $stmt = $conn->prepare("SELECT reply_body, sent_at FROM whatsapp_staff_replies WHERE enquiry_id=? AND company_id=? ORDER BY sent_at ASC");
+    $stmt = $conn->prepare("SELECT reply_body, sent_at, delivery_status, error_message FROM whatsapp_staff_replies WHERE enquiry_id=? AND company_id=? ORDER BY sent_at ASC");
     $stmt->bind_param('ii', $leadId, $companyId);
     $stmt->execute();
     foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
-        $thread[] = ['direction' => 'out', 'body' => $row['reply_body'], 'at' => $row['sent_at']];
+        $thread[] = ['direction' => 'out', 'body' => $row['reply_body'], 'at' => $row['sent_at'], 'delivery_status' => $row['delivery_status'], 'error_message' => $row['error_message']];
     }
     $stmt->close();
 
@@ -422,6 +422,22 @@ function pauseWhatsAppBot(mysqli $conn, int $companyId, string $phone, string $p
     return true;
 }
 
+// Called from whatsapp-webhook.php's status-callback handling — matches a
+// Meta delivery status update back to the manual reply it belongs to via
+// wa_message_id (set at send time by sendManualWhatsAppReply()) and records
+// the outcome so whatsapp-chats.php can show staff a "failed to deliver"
+// notice instead of leaving them to assume a 2xx send meant the customer
+// actually got it. $status should be one of Meta's status values
+// (sent/delivered/read/failed); only 'failed' needs $errorMessage.
+function updateWhatsAppStaffReplyDeliveryStatus(mysqli $conn, string $waMessageId, string $status, ?string $errorMessage = null): bool {
+    $stmt = $conn->prepare("UPDATE whatsapp_staff_replies SET delivery_status=?, error_message=? WHERE wa_message_id=?");
+    $stmt->bind_param('sss', $status, $errorMessage, $waMessageId);
+    $stmt->execute();
+    $updated = $stmt->affected_rows > 0;
+    $stmt->close();
+    return $updated;
+}
+
 function resumeWhatsAppBot(mysqli $conn, int $companyId, string $phone): bool {
     $stmt = $conn->prepare("UPDATE whatsapp_bot_sessions SET is_paused=0, paused_at=NULL, paused_by=NULL WHERE company_id=? AND phone=?");
     $stmt->bind_param('is', $companyId, $phone);
@@ -454,11 +470,17 @@ function sendManualWhatsAppReply(mysqli $conn, int $companyId, ?int $enquiryId, 
     if ($recipient === null) {
         return false;
     }
-    if (!sendViaWhatsAppCloudApiText($recipient, $body)) {
+    // $waMessageId lets a later status callback (whatsapp-webhook.php) find
+    // this exact row and flip delivery_status to delivered/failed — Meta
+    // accepts this send synchronously (2xx) even when it will actually fail
+    // to deliver (e.g. outside the customer's 24h window), so a true return
+    // here only means "Meta accepted the request", not "the customer got it".
+    $waMessageId = null;
+    if (!sendViaWhatsAppCloudApiText($recipient, $body, $waMessageId)) {
         return false;
     }
-    $stmt = $conn->prepare("INSERT INTO whatsapp_staff_replies (company_id, enquiry_id, phone, user_id, reply_body, sent_at) VALUES (?, ?, ?, ?, ?, NOW())");
-    $stmt->bind_param('iisis', $companyId, $enquiryId, $phone, $userId, $body);
+    $stmt = $conn->prepare("INSERT INTO whatsapp_staff_replies (company_id, enquiry_id, phone, user_id, reply_body, wa_message_id, delivery_status, sent_at) VALUES (?, ?, ?, ?, ?, ?, 'sent', NOW())");
+    $stmt->bind_param('iisiss', $companyId, $enquiryId, $phone, $userId, $body, $waMessageId);
     $stmt->execute();
     $stmt->close();
 
@@ -577,11 +599,11 @@ function getWhatsAppThreadByPhone(mysqli $conn, int $companyId, string $phone): 
     }
     $stmt->close();
 
-    $stmt = $conn->prepare("SELECT reply_body, sent_at FROM whatsapp_staff_replies WHERE phone=? AND company_id=? ORDER BY sent_at ASC");
+    $stmt = $conn->prepare("SELECT reply_body, sent_at, delivery_status, error_message FROM whatsapp_staff_replies WHERE phone=? AND company_id=? ORDER BY sent_at ASC");
     $stmt->bind_param('si', $phone, $companyId);
     $stmt->execute();
     foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
-        $thread[] = ['direction' => 'out', 'body' => $row['reply_body'], 'at' => $row['sent_at']];
+        $thread[] = ['direction' => 'out', 'body' => $row['reply_body'], 'at' => $row['sent_at'], 'delivery_status' => $row['delivery_status'], 'error_message' => $row['error_message']];
     }
     $stmt->close();
 
