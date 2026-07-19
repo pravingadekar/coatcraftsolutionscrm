@@ -341,6 +341,132 @@ function sendViaWhatsAppCloudApiText(string $toDigits, string $body): bool {
     return false;
 }
 
+/* Sends a WhatsApp "interactive list" message (a tappable menu of up to 10
+   rows across up to 10 sections) via the Meta Cloud API — same 24h-window
+   rule as sendViaWhatsAppCloudApiText(). $sections shape:
+   [['title' => ?string, 'rows' => [['id' => string, 'title' => string, 'description' => ?string], ...]]].
+   Validates Meta's documented row/section caps up front and refuses to send
+   (logging why) rather than letting a future content typo (e.g. a 20th
+   service added without updating pagination) get silently rejected by Meta. */
+function sendViaWhatsAppCloudApiList(string $toDigits, string $bodyText, string $buttonLabel, array $sections, ?string $footerText = null): bool {
+    $sectionCount = count($sections);
+    $rowCount = 0;
+    foreach ($sections as $section) {
+        $rowCount += count($section['rows'] ?? []);
+    }
+    if ($sectionCount < 1 || $sectionCount > 10 || $rowCount < 1 || $rowCount > 10) {
+        error_log("WhatsApp Cloud API list send refused: $sectionCount sections / $rowCount rows (limits: 1-10 sections, 1-10 rows total)");
+        return false;
+    }
+
+    $interactive = [
+        'type' => 'list',
+        'body' => ['text' => $bodyText],
+        'action' => [
+            'button' => $buttonLabel,
+            'sections' => array_map(function ($section) {
+                $built = ['rows' => array_map(function ($row) {
+                    $built = ['id' => $row['id'], 'title' => $row['title']];
+                    if (!empty($row['description'])) {
+                        $built['description'] = $row['description'];
+                    }
+                    return $built;
+                }, $section['rows'])];
+                if (!empty($section['title'])) {
+                    $built['title'] = $section['title'];
+                }
+                return $built;
+            }, $sections),
+        ],
+    ];
+    if ($footerText !== null) {
+        $interactive['footer'] = ['text' => $footerText];
+    }
+
+    $payload = [
+        'messaging_product' => 'whatsapp',
+        'to' => $toDigits,
+        'type' => 'interactive',
+        'interactive' => $interactive,
+    ];
+
+    $ch = curl_init('https://graph.facebook.com/' . WA_API_VERSION . '/' . WA_PHONE_NUMBER_ID . '/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . WA_ACCESS_TOKEN,
+            'Content-Type: application/json',
+        ],
+        CURLOPT_POSTFIELDS => json_encode($payload),
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpCode >= 200 && $httpCode < 300) {
+        return true;
+    }
+    error_log('WhatsApp Cloud API list send failed: HTTP ' . $httpCode . ' ' . ($curlError ?: $response));
+    return false;
+}
+
+/* Sends a WhatsApp "interactive reply button" message (up to 3 tappable
+   buttons) via the Meta Cloud API — same 24h-window rule as
+   sendViaWhatsAppCloudApiText(). $buttons shape: [['id' => string, 'title' =>
+   string], ...] (title must be <=20 chars per Meta's limit). For menus with
+   4+ options use sendViaWhatsAppCloudApiList() instead — Meta caps buttons at
+   3, so this function refuses (logging why) rather than silently dropping
+   the 4th+ option. */
+function sendViaWhatsAppCloudApiButtons(string $toDigits, string $bodyText, array $buttons): bool {
+    if (count($buttons) < 1 || count($buttons) > 3) {
+        error_log('WhatsApp Cloud API button send refused: ' . count($buttons) . ' buttons (limit: 1-3, use a list message for more options)');
+        return false;
+    }
+
+    $payload = [
+        'messaging_product' => 'whatsapp',
+        'to' => $toDigits,
+        'type' => 'interactive',
+        'interactive' => [
+            'type' => 'button',
+            'body' => ['text' => $bodyText],
+            'action' => [
+                'buttons' => array_map(function ($button) {
+                    return [
+                        'type' => 'reply',
+                        'reply' => ['id' => $button['id'], 'title' => $button['title']],
+                    ];
+                }, $buttons),
+            ],
+        ],
+    ];
+
+    $ch = curl_init('https://graph.facebook.com/' . WA_API_VERSION . '/' . WA_PHONE_NUMBER_ID . '/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . WA_ACCESS_TOKEN,
+            'Content-Type: application/json',
+        ],
+        CURLOPT_POSTFIELDS => json_encode($payload),
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpCode >= 200 && $httpCode < 300) {
+        return true;
+    }
+    error_log('WhatsApp Cloud API button send failed: HTTP ' . $httpCode . ' ' . ($curlError ?: $response));
+    return false;
+}
+
 /* Rule-based keyword router for the WhatsApp FAQ bot — no AI/LLM, just
    simple substring matching against a handful of topics staff used to get
    asked about on calls (price, services, warranty). Falls back to a generic
@@ -374,6 +500,37 @@ function sendWhatsAppBotReply(string $phone, string $replyText): bool {
         return sendViaWhatsAppCloudApiText($recipient, $replyText);
     } catch (\Throwable $e) {
         error_log('sendWhatsAppBotReply failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/* List-message counterpart to sendWhatsAppBotReply() — normalizes the phone
+   the same way, used by the guided-menu bot (whatsapp-bot-router.php) for
+   any menu with 4+ options. */
+function sendWhatsAppBotList(string $phone, string $bodyText, string $buttonLabel, array $sections, ?string $footerText = null): bool {
+    $recipient = normalizeIndianPhoneForSms($phone);
+    if ($recipient === null) {
+        return false;
+    }
+    try {
+        return sendViaWhatsAppCloudApiList($recipient, $bodyText, $buttonLabel, $sections, $footerText);
+    } catch (\Throwable $e) {
+        error_log('sendWhatsAppBotList failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/* Button-message counterpart to sendWhatsAppBotReply() — normalizes the phone
+   the same way, used by the guided-menu bot for menus with <=3 options. */
+function sendWhatsAppBotButtons(string $phone, string $bodyText, array $buttons): bool {
+    $recipient = normalizeIndianPhoneForSms($phone);
+    if ($recipient === null) {
+        return false;
+    }
+    try {
+        return sendViaWhatsAppCloudApiButtons($recipient, $bodyText, $buttons);
+    } catch (\Throwable $e) {
+        error_log('sendWhatsAppBotButtons failed: ' . $e->getMessage());
         return false;
     }
 }

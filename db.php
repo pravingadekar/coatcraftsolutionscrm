@@ -191,6 +191,45 @@ $conn->query("CREATE TABLE IF NOT EXISTS missed_call_message_log (
     UNIQUE KEY unique_company_phone (company_id, phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+// Live conversation state for the guided-menu WhatsApp bot (whatsapp-webhook.php
+// / whatsapp-bot-router.php) — one row per phone (upserted, not appended),
+// since this tracks where a phone currently is in the menu tree plus its
+// selections, not a history log. context_json is a flexible JSON blob (not
+// fixed columns) so later phases (estimate/quotation flows) can add fields
+// without needing new ALTERs. is_paused/paused_at/paused_by let staff take
+// over a conversation (via whatsapp-chats.php) without the bot talking over
+// them; a paused phone gets zero bot activity until resumed.
+$conn->query("CREATE TABLE IF NOT EXISTS whatsapp_bot_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    stage VARCHAR(40) NOT NULL DEFAULT 'welcome',
+    context_json TEXT DEFAULT NULL,
+    is_paused TINYINT(1) NOT NULL DEFAULT 0,
+    paused_at DATETIME DEFAULT NULL,
+    paused_by VARCHAR(150) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_company_phone (company_id, phone),
+    INDEX idx_company_stage (company_id, stage)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+// Staff-authored WhatsApp replies sent manually from whatsapp-chats.php.
+// Kept separate from whatsapp_bot_replies (which means "the bot said this" and
+// is read by hasWhatsAppBotRepliedBefore()-style logic) so human-authored
+// messages never get confused with bot output.
+$conn->query("CREATE TABLE IF NOT EXISTS whatsapp_staff_replies (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    enquiry_id INT DEFAULT NULL,
+    phone VARCHAR(20) NOT NULL,
+    user_id INT NOT NULL,
+    reply_body TEXT NOT NULL,
+    sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_company_enquiry (company_id, enquiry_id),
+    INDEX idx_company_phone (company_id, phone)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 // Daily notes table
 $conn->query("CREATE TABLE IF NOT EXISTS daily_notes (
     id INT AUTO_INCREMENT PRIMARY KEY,

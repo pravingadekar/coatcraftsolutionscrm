@@ -9,6 +9,18 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/leads.php';
 require_once __DIR__ . '/mailer.php';
+// NOTE: deliberately NOT requiring sendmail.php/reminder.php here even though
+// both define sendPushNotification() — both are full request-handling
+// endpoints with top-level code that reads $_POST/$_GET and can exit/redirect
+// immediately (e.g. sendmail.php exits with an error if $_POST['form_token']
+// is missing, which it always will be for a WhatsApp webhook POST). Including
+// either would kill this script before it processes the inbound message.
+// notifyStaffOfBotInterest() (leads.php) reimplements the same push-send
+// logic using just the safe includes below.
+require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/push-config.php';
+require_once __DIR__ . '/whatsapp-bot-content.php';
+require_once __DIR__ . '/whatsapp-bot-router.php';
 
 // Meta's one-time verification handshake when the webhook URL is first
 // saved in the App dashboard — echo hub_challenge back only if our verify
@@ -57,24 +69,34 @@ foreach (($payload['entry'] ?? []) as $entry) {
             if ($from === '' || $waMessageId === '') {
                 continue;
             }
-            $body = $message['text']['body'] ?? ('[' . ($message['type'] ?? 'unsupported') . ' message]');
+            // Interactive replies (list/button taps) carry a structured id in
+            // addition to a human-readable title — capture both, since the
+            // guided-menu bot routes on the id while $body stays the
+            // human-readable text stored in whatsapp_inbound_messages.
+            $interactiveId = null;
+            if (isset($message['interactive']['list_reply']['id'])) {
+                $interactiveId = $message['interactive']['list_reply']['id'];
+                $body = $message['interactive']['list_reply']['title'] ?? $interactiveId;
+            } elseif (isset($message['interactive']['button_reply']['id'])) {
+                $interactiveId = $message['interactive']['button_reply']['id'];
+                $body = $message['interactive']['button_reply']['title'] ?? $interactiveId;
+            } else {
+                $body = $message['text']['body'] ?? ('[' . ($message['type'] ?? 'unsupported') . ' message]');
+            }
             $enquiryId = findLeadIdByPhone($conn, $companyId, $from);
             $isNewInboundMessage = logWhatsAppInbound($conn, $companyId, $enquiryId, $from, $waMessageId, $body);
 
-            // Rule-based FAQ bot: replies to every inbound message (known
-            // leads included, per explicit user request) — staff can still
-            // reply manually on top of this via whatsapp-chats.php. On a
-            // phone's very first-ever contact, always send the menu
-            // (regardless of what they typed); after that, match their
-            // reply against the menu numbers/keywords. $isNewInboundMessage
-            // guards against Meta retrying webhook delivery of the same
-            // message re-firing this.
-            if ($isNewInboundMessage) {
-                $isFirstBotContact = !hasWhatsAppBotRepliedBefore($conn, $companyId, $from);
-                $replyText = $isFirstBotContact ? WA_BOT_REPLY_MENU : resolveWhatsAppBotReply($body);
-                if (sendWhatsAppBotReply($from, $replyText)) {
-                    logWhatsAppBotReply($conn, $companyId, $from, $replyText, $enquiryId);
-                }
+            // Guided-menu bot (whatsapp-bot-router.php): replies to every
+            // inbound message (known leads included, per explicit user
+            // request) unless staff have paused it for this phone (either by
+            // sending a manual reply via whatsapp-chats.php, or the customer
+            // asking for a human/AI expert). $isNewInboundMessage guards
+            // against Meta retrying webhook delivery of the same message
+            // re-firing this. A paused phone gets zero bot activity — not
+            // even a session row is touched — until staff resume it.
+            if ($isNewInboundMessage && !isWhatsAppBotPaused($conn, $companyId, $from)) {
+                $session = getOrCreateWhatsAppBotSession($conn, $companyId, $from);
+                routeWhatsAppBotMessage($conn, $companyId, $from, $session, $interactiveId, $body, $enquiryId);
             }
         }
         // Status updates (sent/delivered/read/failed) also arrive here via

@@ -292,6 +292,14 @@ function getWhatsAppThread(mysqli $conn, int $companyId, int $leadId): array {
     }
     $stmt->close();
 
+    $stmt = $conn->prepare("SELECT reply_body, sent_at FROM whatsapp_staff_replies WHERE enquiry_id=? AND company_id=? ORDER BY sent_at ASC");
+    $stmt->bind_param('ii', $leadId, $companyId);
+    $stmt->execute();
+    foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+        $thread[] = ['direction' => 'out', 'body' => $row['reply_body'], 'at' => $row['sent_at']];
+    }
+    $stmt->close();
+
     usort($thread, fn($a, $b) => strtotime($a['at']) <=> strtotime($b['at']));
     return $thread;
 }
@@ -369,6 +377,163 @@ function hasWhatsAppBotRepliedBefore(mysqli $conn, int $companyId, string $phone
     return $count > 0;
 }
 
+// Guided-menu bot conversation state (whatsapp-bot-router.php) — one row per
+// phone, upserted (not appended), since this is live "where are they in the
+// menu tree" state, not a history log. Returns context_json already decoded
+// into a plain array (empty array if null/absent) so callers never touch
+// json_decode() directly.
+function getOrCreateWhatsAppBotSession(mysqli $conn, int $companyId, string $phone): array {
+    $stmt = $conn->prepare("INSERT INTO whatsapp_bot_sessions (company_id, phone) VALUES (?, ?) ON DUPLICATE KEY UPDATE phone = phone");
+    $stmt->bind_param('is', $companyId, $phone);
+    $stmt->execute();
+    $stmt->close();
+
+    $stmt = $conn->prepare("SELECT * FROM whatsapp_bot_sessions WHERE company_id=? AND phone=?");
+    $stmt->bind_param('is', $companyId, $phone);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    $row['context'] = $row['context_json'] !== null ? (json_decode($row['context_json'], true) ?? []) : [];
+    return $row;
+}
+
+function updateWhatsAppBotSession(mysqli $conn, int $companyId, string $phone, string $stage, array $context): bool {
+    $contextJson = json_encode($context);
+    $stmt = $conn->prepare("UPDATE whatsapp_bot_sessions SET stage=?, context_json=? WHERE company_id=? AND phone=?");
+    $stmt->bind_param('ssis', $stage, $contextJson, $companyId, $phone);
+    $stmt->execute();
+    $updated = $stmt->affected_rows >= 0;
+    $stmt->close();
+    return $updated;
+}
+
+// Silences the guided-menu bot for this phone — used both when a customer
+// asks for a human/AI expert and when staff sends a manual reply (see
+// sendManualWhatsAppReply() below). Upserts rather than assuming a session
+// row already exists, so staff can pre-emptively pause a phone that has
+// never messaged the bot (e.g. before calling a fresh lead).
+function pauseWhatsAppBot(mysqli $conn, int $companyId, string $phone, string $pausedBy): bool {
+    $stmt = $conn->prepare("INSERT INTO whatsapp_bot_sessions (company_id, phone, is_paused, paused_at, paused_by) VALUES (?, ?, 1, NOW(), ?)
+        ON DUPLICATE KEY UPDATE is_paused=1, paused_at=NOW(), paused_by=VALUES(paused_by)");
+    $stmt->bind_param('iss', $companyId, $phone, $pausedBy);
+    $stmt->execute();
+    $stmt->close();
+    return true;
+}
+
+function resumeWhatsAppBot(mysqli $conn, int $companyId, string $phone): bool {
+    $stmt = $conn->prepare("UPDATE whatsapp_bot_sessions SET is_paused=0, paused_at=NULL, paused_by=NULL WHERE company_id=? AND phone=?");
+    $stmt->bind_param('is', $companyId, $phone);
+    $stmt->execute();
+    $stmt->close();
+    return true;
+}
+
+// No row at all means the bot has never been paused for this phone — not
+// paused, by definition.
+function isWhatsAppBotPaused(mysqli $conn, int $companyId, string $phone): bool {
+    $stmt = $conn->prepare("SELECT is_paused FROM whatsapp_bot_sessions WHERE company_id=? AND phone=?");
+    $stmt->bind_param('is', $companyId, $phone);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $row !== null && (int)$row['is_paused'] === 1;
+}
+
+// Sends a staff-authored WhatsApp reply from whatsapp-chats.php and pauses
+// the guided-menu bot for this phone as a side effect — this is the single
+// call site that hooks manual replies to the pause mechanism, so pausing
+// can't be bypassed by a future new send path. Caller must require_once
+// mailer.php for sendViaWhatsAppCloudApiText()/normalizeIndianPhoneForSms().
+function sendManualWhatsAppReply(mysqli $conn, int $companyId, ?int $enquiryId, string $phone, string $body, int $userId): bool {
+    if ($body === '') {
+        return false;
+    }
+    $recipient = normalizeIndianPhoneForSms($phone);
+    if ($recipient === null) {
+        return false;
+    }
+    if (!sendViaWhatsAppCloudApiText($recipient, $body)) {
+        return false;
+    }
+    $stmt = $conn->prepare("INSERT INTO whatsapp_staff_replies (company_id, enquiry_id, phone, user_id, reply_body, sent_at) VALUES (?, ?, ?, ?, ?, NOW())");
+    $stmt->bind_param('iisis', $companyId, $enquiryId, $phone, $userId, $body);
+    $stmt->execute();
+    $stmt->close();
+
+    pauseWhatsAppBot($conn, $companyId, $phone, 'staff:' . $userId);
+    return true;
+}
+
+// Shared "stub" helper for guided-menu options that are out of scope for this
+// phase (Instant Estimate, AI Expert, Site Visit, Quotation) — captures the
+// customer's interest into the CRM (creating a minimal lead if none exists
+// yet for this phone) rather than silently dead-ending the conversation.
+// Real estimate/quotation/site-visit-booking engines are future phases; this
+// just makes sure sales sees the request.
+function captureWhatsAppBotInterest(mysqli $conn, int $companyId, string $phone, ?int $enquiryId, string $noteText): int {
+    if ($enquiryId !== null) {
+        addLeadUpdate($conn, $companyId, $enquiryId, $noteText);
+    } else {
+        // Deliberately omits created_at/updated_at from the column list (relying
+        // on their DB defaults) — same convention as sendmail.php's enquiries
+        // insert, and avoids assuming updated_at exists (some older tenant DBs
+        // predate that column and were never migrated).
+        $stmt = $conn->prepare("INSERT INTO enquiries (company_id, type, name, phone, email, message, status) VALUES (?, 'commercial', '', ?, '', ?, 'New')");
+        $stmt->bind_param('iss', $companyId, $phone, $noteText);
+        $stmt->execute();
+        $enquiryId = $stmt->insert_id;
+        $stmt->close();
+    }
+    notifyStaffOfBotInterest($companyId, 'WhatsApp bot lead interest', $noteText . ' — ' . $phone);
+    return $enquiryId;
+}
+
+// Same push-send logic as sendPushNotification() in sendmail.php/reminder.php
+// (both full endpoint scripts, unsafe to require_once from a webhook — see
+// the note in whatsapp-webhook.php), duplicated here rather than shared so
+// this file only needs the safe vendor/autoload.php + push-config.php
+// includes. Caller must have required those first.
+function notifyStaffOfBotInterest(int $companyId, string $title, string $body): void {
+    global $conn;
+    try {
+        $auth = [
+            'VAPID' => [
+                'subject' => VAPID_SUBJECT,
+                'publicKey' => VAPID_PUBLIC_KEY,
+                'privateKey' => VAPID_PRIVATE_KEY,
+            ],
+        ];
+        $webPush = new \Minishlink\WebPush\WebPush($auth);
+        $stmt = $conn->prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE company_id = ?");
+        $stmt->bind_param('i', $companyId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if (!$result) {
+            return;
+        }
+        $payload = json_encode(['type' => 'whatsapp_bot_interest', 'title' => $title, 'body' => $body, 'url' => '/whatsapp-chats.php']);
+        while ($row = $result->fetch_assoc()) {
+            try {
+                $subscription = \Minishlink\WebPush\Subscription::create([
+                    'endpoint' => $row['endpoint'],
+                    'publicKey' => $row['p256dh'],
+                    'authToken' => $row['auth'],
+                ]);
+                $report = $webPush->sendOneNotification($subscription, $payload);
+                if (!$report->isSuccess()) {
+                    error_log('WhatsApp bot push send failure: ' . $report->getReason());
+                }
+            } catch (\Throwable $e) {
+                error_log('WhatsApp bot push exception: ' . $e->getMessage());
+            }
+        }
+    } catch (\Throwable $e) {
+        error_log('WhatsApp bot push notification error: ' . $e->getMessage());
+    }
+}
+
 // getWhatsAppConversations()'s counterpart for numbers with NO matching lead
 // yet (enquiry_id IS NULL) — these are invisible to getWhatsAppConversations()
 // since it INNER JOINs enquiries, so without this the rule-based bot's
@@ -405,6 +570,14 @@ function getWhatsAppThreadByPhone(mysqli $conn, int $companyId, string $phone): 
     $stmt->close();
 
     $stmt = $conn->prepare("SELECT reply_body, sent_at FROM whatsapp_bot_replies WHERE phone=? AND company_id=? ORDER BY sent_at ASC");
+    $stmt->bind_param('si', $phone, $companyId);
+    $stmt->execute();
+    foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+        $thread[] = ['direction' => 'out', 'body' => $row['reply_body'], 'at' => $row['sent_at']];
+    }
+    $stmt->close();
+
+    $stmt = $conn->prepare("SELECT reply_body, sent_at FROM whatsapp_staff_replies WHERE phone=? AND company_id=? ORDER BY sent_at ASC");
     $stmt->bind_param('si', $phone, $companyId);
     $stmt->execute();
     foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
