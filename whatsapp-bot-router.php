@@ -350,11 +350,24 @@ function waBotRouteAiConsult(mysqli $conn, int $companyId, string $from, ?string
     updateWhatsAppBotSession($conn, $companyId, $from, 'ai_consult', ['ai_history' => $history]);
 }
 
+// Words that reset a wandered-off customer straight back to the main menu
+// instead of the static keyword-bot fallback below — added after a live
+// report (Munna Yadav) got stuck repeating "Hi"/random text mid-tree and
+// kept getting the same generic "our team will get back to you" reply with
+// no way back to the guided menu.
+const WA_BOT_MENU_RESET_WORDS = ['hi', 'hello', 'hey', 'menu', 'start', 'restart', 'main menu', 'hii', 'hlo'];
+
 // Shared fallback for free-text input received while inside the menu tree
 // (not stage welcome/welcome_sent) — preserves the original keyword bot's
 // behavior (pricing/services/warranty/fallback) so ignoring the menu never
-// dead-ends the conversation. Stage is left unchanged.
+// dead-ends the conversation. Stage is left unchanged, unless $body is a
+// menu-reset word (see above), in which case it jumps back to welcome_sent.
 function waBotFallbackToKeywordReply(mysqli $conn, int $companyId, string $from, string $body, ?int $enquiryId): void {
+    if (in_array(strtolower(trim($body)), WA_BOT_MENU_RESET_WORDS, true)) {
+        waBotSendWelcomeMenu($conn, $companyId, $from, $enquiryId);
+        updateWhatsAppBotSession($conn, $companyId, $from, 'welcome_sent', []);
+        return;
+    }
     $reply = resolveWhatsAppBotReply($body);
     waBotSendAndLog($conn, $companyId, $from, $enquiryId, sendWhatsAppBotReply($from, $reply), $reply);
 }
