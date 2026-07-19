@@ -214,6 +214,50 @@ $conn->query("CREATE TABLE IF NOT EXISTS whatsapp_bot_sessions (
     INDEX idx_company_stage (company_id, stage)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+// One-time data fix: rows created before phone canonicalization (see
+// canonicalPhoneKey() in leads.php) may still be keyed by a non-canonical
+// phone string — e.g. Meta's webhook always includes the country code
+// ("919999900001"), while a lead's stored enquiries.phone is often the bare
+// 10-digit number the customer typed ("9999900001"). That silently split
+// what should be ONE phone's session into two different rows, so pausing via
+// one code path and resuming via another touched different rows, leaving a
+// conversation stuck paused even though the UI showed "Bot active". The
+// WHERE clause below matches nothing once every row is already canonical, so
+// this becomes a cheap no-op query on every page load after the first fix.
+$nonCanonicalSessionRows = $conn->query(
+    "SELECT id, company_id, phone, is_paused FROM whatsapp_bot_sessions WHERE LENGTH(phone) <> 10 OR phone REGEXP '[^0-9]'"
+);
+if ($nonCanonicalSessionRows && $nonCanonicalSessionRows->num_rows > 0) {
+    while ($row = $nonCanonicalSessionRows->fetch_assoc()) {
+        $canonicalPhone = substr(preg_replace('/\D/', '', $row['phone']), -10);
+        if ($canonicalPhone === '' || $canonicalPhone === $row['phone']) {
+            continue;
+        }
+        $existing = $conn->query(
+            "SELECT id, is_paused FROM whatsapp_bot_sessions WHERE company_id={$row['company_id']} AND phone='" . $conn->real_escape_string($canonicalPhone) . "' AND id <> {$row['id']}"
+        )->fetch_assoc();
+        if ($existing) {
+            // A canonical row already exists for this phone (e.g. written by
+            // a call that happened after canonicalization shipped). Keep
+            // whichever of the two is currently paused — safer than silently
+            // un-pausing a conversation staff intentionally paused — and
+            // drop the other so the UNIQUE KEY doesn't reject the merge.
+            if ((int)$row['is_paused'] === 1 && (int)$existing['is_paused'] !== 1) {
+                // Must delete the conflicting row FIRST — the UNIQUE KEY on
+                // (company_id, phone) rejects the UPDATE below otherwise,
+                // since $existing still occupies that exact phone value
+                // until it's gone.
+                $conn->query("DELETE FROM whatsapp_bot_sessions WHERE id={$existing['id']}");
+                $conn->query("UPDATE whatsapp_bot_sessions SET phone='" . $conn->real_escape_string($canonicalPhone) . "' WHERE id={$row['id']}");
+            } else {
+                $conn->query("DELETE FROM whatsapp_bot_sessions WHERE id={$row['id']}");
+            }
+        } else {
+            $conn->query("UPDATE whatsapp_bot_sessions SET phone='" . $conn->real_escape_string($canonicalPhone) . "' WHERE id={$row['id']}");
+        }
+    }
+}
+
 // Staff-authored WhatsApp replies sent manually from whatsapp-chats.php.
 // Kept separate from whatsapp_bot_replies (which means "the bot said this" and
 // is read by hasWhatsAppBotRepliedBefore()-style logic) so human-authored

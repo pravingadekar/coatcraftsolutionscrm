@@ -74,7 +74,12 @@ function waBotRouteWelcomeSent(mysqli $conn, int $companyId, string $from, ?stri
             return;
         case 'menu:estimate':
             captureWhatsAppBotInterest($conn, $companyId, $from, $enquiryId, 'WhatsApp bot: requested Instant Estimate');
-            $reply = "Thanks! Our team will prepare your instant estimate and reach out to you shortly. 🙂\n\nReply with another option any time.";
+            // Gives a rough, terms-and-conditions-qualified ballpark (from
+            // WA_BOT_REPLY_PRICING, same text as the "Price" button/keyword,
+            // kept in sync deliberately) rather than a bare "team will reach
+            // out" — the real estimate ENGINE (stage 6) is still out of
+            // scope, this is just enough to give the customer an idea.
+            $reply = WA_BOT_REPLY_PRICING . "\n\nOur team will prepare your detailed instant estimate and reach out to you shortly. 🙂\n\nReply with another option any time.";
             waBotSendAndLog($conn, $companyId, $from, $enquiryId, sendWhatsAppBotReply($from, $reply), $reply);
             updateWhatsAppBotSession($conn, $companyId, $from, 'welcome_sent', []);
             return;
@@ -85,7 +90,7 @@ function waBotRouteWelcomeSent(mysqli $conn, int $companyId, string $from, ?stri
             updateWhatsAppBotSession($conn, $companyId, $from, 'welcome_sent', []);
             return;
         case 'menu:projects':
-            $reply = "Our project gallery is being added here. Meanwhile, call/WhatsApp +91 77458 89111 or visit www.coatcraftsolutions.com to see our work.\n\nReply with another option any time.";
+            $reply = "Check out our completed projects here: https://coatcraftsolutions.com/gallery.html 📸\n\nReply with another option any time.";
             waBotSendAndLog($conn, $companyId, $from, $enquiryId, sendWhatsAppBotReply($from, $reply), $reply);
             updateWhatsAppBotSession($conn, $companyId, $from, 'welcome_sent', []);
             return;
@@ -286,7 +291,7 @@ function waBotRouteServiceDetail(mysqli $conn, int $companyId, string $from, ?st
     }
     if (str_starts_with($interactiveId, 'svcdetail:estimate:')) {
         captureWhatsAppBotInterest($conn, $companyId, $from, $enquiryId, 'WhatsApp bot: requested Estimate for "' . $serviceLabel . '"');
-        $reply = "Thanks! Our team will prepare your estimate for {$serviceLabel} and reach out shortly. 🙂";
+        $reply = WA_BOT_REPLY_PRICING . "\n\nOur team will prepare your detailed estimate for {$serviceLabel} and reach out shortly. 🙂";
         waBotSendAndLog($conn, $companyId, $from, $enquiryId, sendWhatsAppBotReply($from, $reply), $reply);
         return;
     }

@@ -377,12 +377,30 @@ function hasWhatsAppBotRepliedBefore(mysqli $conn, int $companyId, string $phone
     return $count > 0;
 }
 
+// Canonical key for anything that indexes whatsapp_bot_sessions/
+// whatsapp_staff_replies by phone — strips everything but digits and keeps
+// only the last 10, matching the fuzzy RIGHT(phone,10) matching
+// findLeadIdByPhone() already uses. Without this, the SAME real number
+// arrives in different string shapes from different sources (Meta's webhook
+// `from` field always includes the country code, e.g. "918888111833", while
+// a lead's stored `enquiries.phone` is often just the bare 10-digit number
+// the customer typed on the enquiry form, e.g. "8888111833") — pausing from
+// one side and resuming from the other would silently touch two different
+// rows, leaving the bot stuck paused with the UI showing "active". Every
+// function below canonicalizes internally so callers can pass phone in
+// whatever format they have it.
+function canonicalPhoneKey(string $phone): string {
+    $digits = preg_replace('/\D/', '', $phone);
+    return substr($digits, -10);
+}
+
 // Guided-menu bot conversation state (whatsapp-bot-router.php) — one row per
 // phone, upserted (not appended), since this is live "where are they in the
 // menu tree" state, not a history log. Returns context_json already decoded
 // into a plain array (empty array if null/absent) so callers never touch
 // json_decode() directly.
 function getOrCreateWhatsAppBotSession(mysqli $conn, int $companyId, string $phone): array {
+    $phone = canonicalPhoneKey($phone);
     $stmt = $conn->prepare("INSERT INTO whatsapp_bot_sessions (company_id, phone) VALUES (?, ?) ON DUPLICATE KEY UPDATE phone = phone");
     $stmt->bind_param('is', $companyId, $phone);
     $stmt->execute();
@@ -399,6 +417,7 @@ function getOrCreateWhatsAppBotSession(mysqli $conn, int $companyId, string $pho
 }
 
 function updateWhatsAppBotSession(mysqli $conn, int $companyId, string $phone, string $stage, array $context): bool {
+    $phone = canonicalPhoneKey($phone);
     $contextJson = json_encode($context);
     $stmt = $conn->prepare("UPDATE whatsapp_bot_sessions SET stage=?, context_json=? WHERE company_id=? AND phone=?");
     $stmt->bind_param('ssis', $stage, $contextJson, $companyId, $phone);
@@ -414,6 +433,7 @@ function updateWhatsAppBotSession(mysqli $conn, int $companyId, string $phone, s
 // row already exists, so staff can pre-emptively pause a phone that has
 // never messaged the bot (e.g. before calling a fresh lead).
 function pauseWhatsAppBot(mysqli $conn, int $companyId, string $phone, string $pausedBy): bool {
+    $phone = canonicalPhoneKey($phone);
     $stmt = $conn->prepare("INSERT INTO whatsapp_bot_sessions (company_id, phone, is_paused, paused_at, paused_by) VALUES (?, ?, 1, NOW(), ?)
         ON DUPLICATE KEY UPDATE is_paused=1, paused_at=NOW(), paused_by=VALUES(paused_by)");
     $stmt->bind_param('iss', $companyId, $phone, $pausedBy);
@@ -439,6 +459,7 @@ function updateWhatsAppStaffReplyDeliveryStatus(mysqli $conn, string $waMessageI
 }
 
 function resumeWhatsAppBot(mysqli $conn, int $companyId, string $phone): bool {
+    $phone = canonicalPhoneKey($phone);
     $stmt = $conn->prepare("UPDATE whatsapp_bot_sessions SET is_paused=0, paused_at=NULL, paused_by=NULL WHERE company_id=? AND phone=?");
     $stmt->bind_param('is', $companyId, $phone);
     $stmt->execute();
@@ -449,6 +470,7 @@ function resumeWhatsAppBot(mysqli $conn, int $companyId, string $phone): bool {
 // No row at all means the bot has never been paused for this phone — not
 // paused, by definition.
 function isWhatsAppBotPaused(mysqli $conn, int $companyId, string $phone): bool {
+    $phone = canonicalPhoneKey($phone);
     $stmt = $conn->prepare("SELECT is_paused FROM whatsapp_bot_sessions WHERE company_id=? AND phone=?");
     $stmt->bind_param('is', $companyId, $phone);
     $stmt->execute();

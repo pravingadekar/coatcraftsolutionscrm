@@ -93,10 +93,10 @@ define('WA_TEMPLATE_MISSED_CALL', 'missed_call_thankyou_coatcraft');
 define('WA_BOT_REPLY_PRICING',
     "CoatCraft Solutions - Approximate Pricing (per sq.ft):\n\n" .
     "🏠 Residential Flooring: Starting ₹300/sqft\n" .
-    "🏭 Industrial Epoxy: 2mm - ₹60, 3mm - ₹70, 4mm - ₹80, 5mm - ₹90\n" .
+    "🏭 Industrial Flooring: Starting ₹45/sqft (depends on thickness & material brand)\n" .
     "🎨 3D Epoxy: ₹350/sqft\n" .
     "🖨️ Digital Paper Epoxy: ₹350/sqft\n\n" .
-    "*Final price depends on a free site visit & survey.\n" .
+    "*Terms & conditions apply. Final price depends on thickness, material brand, and a free site visit & survey.\n" .
     "📞 Call/WhatsApp: +91 77458 89111"
 );
 define('WA_BOT_REPLY_SERVICES',
