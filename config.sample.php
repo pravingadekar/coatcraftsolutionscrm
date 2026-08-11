@@ -146,3 +146,31 @@ define('WA_APP_SECRET', 'CHANGE_ME');
 // https://aistudio.google.com/apikey (no card required).
 define('GEMINI_API_KEY', 'CHANGE_ME');
 define('GEMINI_MODEL', 'gemini-3.5-flash');
+
+// ElevenLabs Conversational AI voice agent (elevenlabs-call-webhook.php) —
+// answers phone calls forwarded from the business line when unanswered/busy.
+// The live call audio itself is bridged directly between Twilio and
+// ElevenLabs (configured in their dashboards, no PHP involved) — this app
+// only receives ElevenLabs' post-call webhook to log the call as a CRM lead.
+// ELEVENLABS_WEBHOOK_SECRET is the signing secret shown when you create the
+// post-call webhook in the ElevenLabs dashboard (Conversational AI > agent >
+// Webhooks) — used to verify the request really came from ElevenLabs.
+define('ELEVENLABS_AGENT_ID', 'CHANGE_ME');
+define('ELEVENLABS_WEBHOOK_SECRET', 'CHANGE_ME');
+define('ELEVENLABS_CALL_COMPANY_ID', 1); // your company's ID in the companies table
+
+// Sync public-form enquiries (sendmail.php) into the Laravel ERP app's own
+// Leads module, right after a successful `enquiries` insert — see
+// syncEnquiryToErpLead() in leads.php. Both apps' databases must live on the
+// same MySQL server/port for this cross-database INSERT to work. Only fires
+// for ERP_SYNC_COMPANY_ID (your company's CRM tenant id) — never for other
+// CRM tenants if this app ever serves more than one business.
+// ERP_SYNC_ENABLED is an instant kill-switch.
+define('ERP_SYNC_ENABLED', true);
+define('ERP_DB_NAME', 'CHANGE_ME');       // the ERP app's database name
+define('ERP_SYNC_COMPANY_ID', 1);         // your company's ID in the companies table
+define('ERP_LEAD_CREATED_BY', 'CHANGE_ME');  // ERP users.id that should own synced leads
+define('ERP_LEAD_USER_ID', 'CHANGE_ME');     // usually same as ERP_LEAD_CREATED_BY
+define('ERP_LEAD_PIPELINE_ID', 'CHANGE_ME'); // ERP pipelines.id to file new leads under
+define('ERP_LEAD_STAGE_ID', 'CHANGE_ME');    // ERP stages.id, typically the first/"Draft" stage
+define('ERP_LEAD_SOURCE_ID', 'CHANGE_ME');   // ERP sources.id, e.g. a "Websites" source

@@ -77,6 +77,15 @@ function addLeadFollowup(mysqli $conn, int $companyId, int $leadId, string $note
     return $inserted;
 }
 
+function completeLeadFollowup(mysqli $conn, int $companyId, int $taskId): bool {
+    $stmt = $conn->prepare("UPDATE enquiry_followups SET status='Done' WHERE id=? AND company_id=?");
+    $stmt->bind_param('ii', $taskId, $companyId);
+    $stmt->execute();
+    $updated = $stmt->affected_rows > 0;
+    $stmt->close();
+    return $updated;
+}
+
 function updateLeadStatus(mysqli $conn, int $companyId, int $leadId, string $status): bool {
     $stmt = $conn->prepare("UPDATE enquiries SET status=? WHERE id=? AND company_id=?");
     $stmt->bind_param('sii', $status, $leadId, $companyId);
@@ -199,6 +208,68 @@ function findLeadIdByPhone(mysqli $conn, int $companyId, string $phone): ?int {
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     return $row ? (int)$row['id'] : null;
+}
+
+// Mirrors a public-form enquiry into the Laravel ERP app's own Leads module
+// (see sendmail.php's call site, right after a successful `enquiries`
+// insert). Both apps share the same MySQL server/port, so this is a plain
+// cross-database INSERT via the fully-qualified `{ERP_DB_NAME}.leads` table
+// name on the *same* $conn — no second DB connection needed. Deliberately
+// swallows every failure (missing config, unreachable ERP DB, schema
+// mismatch, etc.) and never throws: the caller must not let a sync problem
+// turn an already-successful enquiry submission into a failed response for
+// the visitor. Only fires for ERP_SYNC_COMPANY_ID (see config.php) since
+// this CRM app itself is multi-tenant and other tenants' enquiries must
+// never leak into this one ERP instance.
+function syncEnquiryToErpLead(mysqli $conn, int $companyId, int $enquiryId, string $name, string $phone, string $email, string $type, string $notes, string $location = ''): void {
+    if (!defined('ERP_SYNC_ENABLED') || !ERP_SYNC_ENABLED) {
+        return;
+    }
+    if (!defined('ERP_SYNC_COMPANY_ID') || $companyId !== (int)ERP_SYNC_COMPANY_ID) {
+        return;
+    }
+
+    try {
+        $db      = ERP_DB_NAME;
+        $subject = 'Website Enquiry (' . ucfirst($type) . ')';
+
+        $stmt = $conn->prepare(
+            "INSERT INTO `{$db}`.`leads`
+                (name, email, phone, location, subject, user_id, pipeline_id, stage_id, sources, notes, `order`, created_by, is_active, is_converted, date, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 1, 0, CURDATE(), NOW(), NOW())"
+        );
+        if (!$stmt) {
+            throw new \Exception('Prepare failed: ' . $conn->error);
+        }
+
+        $userId     = (int) ERP_LEAD_USER_ID;
+        $pipelineId = (int) ERP_LEAD_PIPELINE_ID;
+        $stageId    = (int) ERP_LEAD_STAGE_ID;
+        $sources    = (string) ERP_LEAD_SOURCE_ID;
+        $createdBy  = (int) ERP_LEAD_CREATED_BY;
+
+        $stmt->bind_param(
+            'sssssiiissi',
+            $name, $email, $phone, $location, $subject,
+            $userId, $pipelineId, $stageId, $sources, $notes,
+            $createdBy
+        );
+
+        if (!$stmt->execute()) {
+            throw new \Exception('Execute failed: ' . $stmt->error);
+        }
+        $erpLeadId = $stmt->insert_id;
+        $stmt->close();
+
+        if ($erpLeadId) {
+            $upd = $conn->prepare("UPDATE enquiries SET erp_lead_id = ? WHERE id = ?");
+            $upd->bind_param('ii', $erpLeadId, $enquiryId);
+            $upd->execute();
+            $upd->close();
+        }
+    } catch (\Throwable $e) {
+        error_log('ERP lead sync failed for enquiry #' . $enquiryId . ': ' . $e->getMessage());
+    }
 }
 
 // Idempotent on wa_message_id — Meta retries webhook delivery on any
@@ -531,6 +602,37 @@ function captureWhatsAppBotInterest(mysqli $conn, int $companyId, string $phone,
         $stmt->close();
     }
     notifyStaffOfBotInterest($companyId, 'WhatsApp bot lead interest', $noteText . ' — ' . $phone);
+    return $enquiryId;
+}
+
+// Idempotent on conversation_id — ElevenLabs (like Meta) may retry webhook
+// delivery, so a replayed post-call payload must not create a duplicate row.
+function logVoiceCall(mysqli $conn, int $companyId, string $callerPhone, string $conversationId, string $callStatus, ?int $durationSeconds, ?string $summary, ?int $enquiryId): ?int {
+    $stmt = $conn->prepare("INSERT IGNORE INTO voice_call_log (company_id, caller_phone, conversation_id, call_status, duration_seconds, transcript_summary, enquiry_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('isssisi', $companyId, $callerPhone, $conversationId, $callStatus, $durationSeconds, $summary, $enquiryId);
+    $stmt->execute();
+    $inserted = $stmt->affected_rows > 0;
+    $insertId = $stmt->insert_id;
+    $stmt->close();
+    return $inserted ? $insertId : null;
+}
+
+// Same shape as captureWhatsAppBotInterest() above, but for a phone call
+// handled entirely by the ElevenLabs AI voice agent rather than the WhatsApp
+// bot — kept separate so the staff push notification correctly says "AI
+// voice call" instead of "WhatsApp bot lead interest".
+function createEnquiryFromVoiceCall(mysqli $conn, int $companyId, string $phone, string $summary): int {
+    $enquiryId = findLeadIdByPhone($conn, $companyId, $phone);
+    if ($enquiryId !== null) {
+        addLeadUpdate($conn, $companyId, $enquiryId, "AI voice call: " . $summary);
+    } else {
+        $stmt = $conn->prepare("INSERT INTO enquiries (company_id, type, name, phone, email, message, status) VALUES (?, 'commercial', '', ?, '', ?, 'New')");
+        $stmt->bind_param('iss', $companyId, $phone, $summary);
+        $stmt->execute();
+        $enquiryId = $stmt->insert_id;
+        $stmt->close();
+    }
+    notifyStaffOfBotInterest($companyId, 'AI voice call handled', $summary . ' — ' . $phone);
     return $enquiryId;
 }
 

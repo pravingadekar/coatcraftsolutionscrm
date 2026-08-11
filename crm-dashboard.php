@@ -94,6 +94,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isExpired) {
         addLeadFollowup($conn, $companyId, intval($_POST['enquiry_id'] ?? 0), trim($_POST['followup_note'] ?? ''), trim($_POST['due_date'] ?? ''));
     }
 
+    if (isset($_POST['complete_followup'])) {
+        completeLeadFollowup($conn, $companyId, intval($_POST['task_id'] ?? 0));
+    }
+
     if (isset($_POST['update_status'])) {
         updateLeadStatus($conn, $companyId, intval($_POST['id']), $_POST['status']);
     }
@@ -324,7 +328,7 @@ $stmt = $conn->prepare("SELECT u.note, u.created_at, e.name, e.status FROM enqui
 $stmt->bind_param('i', $companyId); $stmt->execute();
 $recentUpdates = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); $stmt->close();
 
-$stmt = $conn->prepare("SELECT f.*, e.name, e.phone, e.location, e.status FROM enquiry_followups f JOIN enquiries e ON e.id=f.enquiry_id AND e.company_id=f.company_id WHERE f.company_id=? ORDER BY f.status ASC, f.due_date IS NULL, f.due_date ASC, f.created_at DESC");
+$stmt = $conn->prepare("SELECT f.*, e.name, e.phone, e.location, e.status AS lead_status FROM enquiry_followups f JOIN enquiries e ON e.id=f.enquiry_id AND e.company_id=f.company_id WHERE f.company_id=? ORDER BY f.status ASC, f.due_date IS NULL, f.due_date ASC, f.created_at DESC");
 $stmt->bind_param('i', $companyId); $stmt->execute();
 $followupTasks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); $stmt->close();
 
@@ -922,7 +926,7 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
                                 <?php foreach ($followupTasks as $task): ?>
                                     <tr>
                                         <td><?= intval($task['id']) ?></td>
-                                        <td><?= htmlspecialchars($task['name']) ?> (<?= htmlspecialchars($task['status']) ?>)</td>
+                                        <td><?= htmlspecialchars($task['name']) ?> (<?= htmlspecialchars($task['lead_status']) ?>)</td>
                                         <td><?= htmlspecialchars($task['note']) ?></td>
                                         <td><?= $task['due_date'] ? date('d M Y', strtotime($task['due_date'])) : '-' ?></td>
                                         <td><span class="badge <?= $task['status'] === 'Done' ? 'status-closed' : 'status-contacted' ?>"><?= htmlspecialchars($task['status']) ?></span></td>
@@ -1554,6 +1558,7 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
         <?php endif; ?>
     </main>
 </div>
+
 <script>
 (function() {
     const sidebar = document.getElementById('sidebar');

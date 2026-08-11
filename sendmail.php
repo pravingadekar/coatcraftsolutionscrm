@@ -190,6 +190,25 @@ try {
     $enquiryId = $stmt->insert_id;
     $stmt->close();
 
+    // Mirror this enquiry into the Laravel ERP's Leads module (CoatCraft's
+    // own tenant only; no-op and never throws for other tenants/failures —
+    // see syncEnquiryToErpLead() in leads.php).
+    $erpNotesParts = array_filter([
+        $location !== '' ? "Location: $location" : '',
+        $address !== '' ? "Address: $address" : '',
+        $work_type !== '' ? "Work Type: $work_type" : '',
+        $epoxy_type !== '' ? "Epoxy Type: $epoxy_type" : '',
+        $budget !== '' ? "Budget: $budget" : '',
+        $timeline !== '' ? "Timeline: $timeline" : '',
+        $area !== '' ? "Area: $area" : '',
+        $message !== '' ? "Message: $message" : '',
+    ]);
+    $erpNotes = implode("\n", $erpNotesParts);
+    // Prefer the full street address (residential form) over the
+    // city/area-only location (commercial form) for the Lead's address field.
+    $erpLocation = $address !== '' ? $address : $location;
+    syncEnquiryToErpLead($conn, $companyId, $enquiryId, $name, $phone, $email, $enquiry_type, $erpNotes, $erpLocation);
+
     // SEND EMAIL
     $fromName = $tenant['smtp_from_name'] ?: SMTP_FROM_NAME;
     $notifyEmail = $tenant['notify_email'] ?: SMTP_FROM_EMAIL;

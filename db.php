@@ -191,6 +191,23 @@ $conn->query("CREATE TABLE IF NOT EXISTS missed_call_message_log (
     UNIQUE KEY unique_company_phone (company_id, phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+// One row per phone call handled by the ElevenLabs AI voice agent
+// (elevenlabs-call-webhook.php), populated from ElevenLabs' post-call
+// webhook after the conversation ends. UNIQUE KEY on conversation_id makes
+// the webhook idempotent since ElevenLabs (like Meta) may retry delivery.
+$conn->query("CREATE TABLE IF NOT EXISTS voice_call_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    caller_phone VARCHAR(20) NOT NULL,
+    conversation_id VARCHAR(100) NOT NULL,
+    call_status VARCHAR(50) NOT NULL,
+    duration_seconds INT DEFAULT NULL,
+    transcript_summary TEXT,
+    enquiry_id INT DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_conversation (conversation_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 // Live conversation state for the guided-menu WhatsApp bot (whatsapp-webhook.php
 // / whatsapp-bot-router.php) — one row per phone (upserted, not appended),
 // since this tracks where a phone currently is in the menu tree plus its
@@ -360,4 +377,17 @@ $conn->query("CREATE TABLE IF NOT EXISTS enquiries (
     INDEX idx_company_status (company_id, status),
     INDEX idx_company_created (company_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+// erp_lead_id links a CoatCraft enquiry to the Laravel ERP lead it was synced
+// into by syncEnquiryToErpLead() (leads.php), NULL if never synced or the
+// sync failed — idempotent ALTER (checked via information_schema) since this
+// table already existed in production before this column was added, same
+// pattern as whatsapp_inbound_messages.is_read / whatsapp_bot_replies.enquiry_id above.
+$hasErpLeadIdColumn = $conn->query(
+    "SELECT COUNT(*) c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enquiries' AND COLUMN_NAME = 'erp_lead_id'"
+)->fetch_assoc()['c'] > 0;
+if (!$hasErpLeadIdColumn) {
+    $conn->query("ALTER TABLE enquiries ADD COLUMN erp_lead_id INT DEFAULT NULL AFTER status");
+}
 ?>
