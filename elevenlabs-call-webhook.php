@@ -19,6 +19,20 @@ require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/push-config.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    // For humans visiting this URL in a browser, show a short informational
+    // page instead of a plain 405 so it's easier to confirm the endpoint is
+    // reachable. The webhook still only accepts POST requests for actual
+    // deliveries from ElevenLabs.
+    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'GET') {
+        header('Content-Type: text/html; charset=utf-8');
+        http_response_code(200);
+        echo '<!doctype html><meta charset="utf-8"><title>ElevenLabs webhook</title>'
+            . '<h1>ElevenLabs webhook endpoint</h1>'
+            . '<p>This endpoint accepts <strong>POST</strong> requests from ElevenLabs only.</p>'
+            . '<p>To test, send a signed POST request with the <code>ElevenLabs-Signature</code> header.</p>';
+        exit;
+    }
+
     http_response_code(405);
     exit;
 }
