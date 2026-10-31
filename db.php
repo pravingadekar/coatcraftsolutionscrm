@@ -390,4 +390,57 @@ $hasErpLeadIdColumn = $conn->query(
 if (!$hasErpLeadIdColumn) {
     $conn->query("ALTER TABLE enquiries ADD COLUMN erp_lead_id INT DEFAULT NULL AFTER status");
 }
+
+// source = which channel the lead came in on (website, whatsapp, voice,
+// missed_call, meta_ads); source_detail = UTM campaign / landing page /
+// referrer for website leads — powers the leads-by-source report. Same
+// idempotent ALTER pattern as erp_lead_id above.
+$hasSourceColumn = $conn->query(
+    "SELECT COUNT(*) c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enquiries' AND COLUMN_NAME = 'source'"
+)->fetch_assoc()['c'] > 0;
+if (!$hasSourceColumn) {
+    $conn->query("ALTER TABLE enquiries ADD COLUMN source VARCHAR(50) DEFAULT NULL AFTER erp_lead_id, ADD COLUMN source_detail VARCHAR(500) DEFAULT NULL AFTER source");
+}
+
+// work_done_at = when the lead first moved to 'Work Done' (see
+// updateLeadStatus()); review_requested_at = when reminder.php sent the
+// Google review WhatsApp, so each customer is asked exactly once.
+$hasWorkDoneAtColumn = $conn->query(
+    "SELECT COUNT(*) c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enquiries' AND COLUMN_NAME = 'work_done_at'"
+)->fetch_assoc()['c'] > 0;
+// One row per Meta Lead Ads lead (meta-leads-webhook.php) — Meta retries
+// webhook deliveries, so leadgen_id must never create a second enquiry.
+$conn->query("CREATE TABLE IF NOT EXISTS meta_lead_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    leadgen_id VARCHAR(64) NOT NULL,
+    enquiry_id INT DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_leadgen (leadgen_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+// Numbers that replied STOP (whatsapp-webhook.php) — never sent marketing
+// (reengage.php) again. Keyed on the last 10 digits like findLeadIdByPhone().
+$conn->query("CREATE TABLE IF NOT EXISTS whatsapp_opt_outs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    phone_last10 CHAR(10) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_company_phone (company_id, phone_last10)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+// When reengage.php last sent this lead a win-back offer (90-day cooldown).
+$hasReengagedColumn = $conn->query(
+    "SELECT COUNT(*) c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enquiries' AND COLUMN_NAME = 'last_reengaged_at'"
+)->fetch_assoc()['c'] > 0;
+if (!$hasReengagedColumn) {
+    $conn->query("ALTER TABLE enquiries ADD COLUMN last_reengaged_at DATETIME DEFAULT NULL");
+}
+
+if (!$hasWorkDoneAtColumn) {
+    $conn->query("ALTER TABLE enquiries ADD COLUMN work_done_at DATETIME DEFAULT NULL AFTER source_detail, ADD COLUMN review_requested_at DATETIME DEFAULT NULL AFTER work_done_at");
+}
 ?>

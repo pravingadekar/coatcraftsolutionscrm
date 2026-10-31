@@ -3,6 +3,8 @@ require_once __DIR__ . '/auth.php';
 require 'db.php';
 require __DIR__ . '/vendor/autoload.php';
 require __DIR__ . '/push-config.php';
+require_once __DIR__ . '/mailer.php';
+require_once __DIR__ . '/leads.php';
 
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
@@ -127,6 +129,47 @@ function runReminderChecks($companyId) {
         $results[] = 'No site visits scheduled today.';
     }
 
+    $results = array_merge($results, sendDueReviewRequests($companyId));
+
+    return $results;
+}
+
+// Asks each finished customer for a Google review once, REVIEW_REQUEST_DELAY_DAYS
+// (default 2) after their lead was first marked 'Work Done'.
+function sendDueReviewRequests($companyId) {
+    global $conn;
+    if (!reviewRequestEnabled()) {
+        return ['Review requests off (set WA_TEMPLATE_REVIEW_REQUEST + GOOGLE_REVIEW_URL).'];
+    }
+
+    $delayDays = defined('REVIEW_REQUEST_DELAY_DAYS') ? (int) REVIEW_REQUEST_DELAY_DAYS : 2;
+    $stmt = $conn->prepare("SELECT company_display_name FROM tenant_settings WHERE company_id = ?");
+    $stmt->bind_param('i', $companyId);
+    $stmt->execute();
+    $tenantName = $stmt->get_result()->fetch_assoc()['company_display_name'] ?? 'CoatCraft Solutions';
+    $stmt->close();
+
+    $stmt = $conn->prepare("SELECT id, name, phone FROM enquiries WHERE company_id = ? AND status = 'Work Done' AND review_requested_at IS NULL AND work_done_at <= DATE_SUB(NOW(), INTERVAL ? DAY) AND phone <> '' LIMIT 50");
+    $stmt->bind_param('ii', $companyId, $delayDays);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    $results = [];
+    foreach ($rows as $row) {
+        $sent = sendReviewRequestWhatsApp($row['phone'], (string) $row['name'], (string) $tenantName);
+        if ($sent) {
+            $upd = $conn->prepare("UPDATE enquiries SET review_requested_at = NOW() WHERE id = ? AND company_id = ?");
+            $upd->bind_param('ii', $row['id'], $companyId);
+            $upd->execute();
+            $upd->close();
+            addLeadUpdate($conn, $companyId, (int) $row['id'], 'Google review request sent on WhatsApp');
+        }
+        $results[] = "Review request ({$row['id']}): " . ($sent ? 'sent' : 'failed');
+    }
+    if (!$rows) {
+        $results[] = 'No review requests due.';
+    }
     return $results;
 }
 

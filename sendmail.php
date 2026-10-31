@@ -6,6 +6,20 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 header('Content-Type: application/json');
 
+// The marketing website (coatcraftsolutions.com) posts its quote/contact
+// forms here cross-origin — allow only those origins to read the response.
+$allowedOrigins = ['https://www.coatcraftsolutions.com', 'https://coatcraftsolutions.com'];
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($origin, $allowedOrigins, true)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Vary: Origin');
+    header('Access-Control-Allow-Methods: POST, OPTIONS');
+}
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
+
 // Safety net: if a fatal error happens anywhere below (e.g. missing file,
 // bad include), still return JSON instead of breaking the frontend's
 // res.json() parsing. Registered before the requires so it also covers
@@ -119,6 +133,31 @@ try {
     }
     $companyId = (int)$tenant['company_id'];
 
+    // Spam traps: `company_website` is a hidden honeypot field real visitors
+    // never see, and `form_started_at` (ms timestamp set by the form's JS)
+    // catches bots that submit instantly. Both are optional so older forms
+    // without them keep working. Bots get a fake success so they don't retry.
+    $honeypot = trim($_POST['company_website'] ?? '');
+    $startedAtMs = (int)($_POST['form_started_at'] ?? 0);
+    $tooFast = $startedAtMs > 0 && (microtime(true) * 1000 - $startedAtMs) < 3000;
+    if ($honeypot !== '' || $tooFast) {
+        error_log('sendmail.php: spam submission dropped (' . ($honeypot !== '' ? 'honeypot' : 'too fast') . ') from ' . clientIp());
+        echo json_encode(['success' => true, 'message' => 'Thank you! We will contact you soon.']);
+        exit;
+    }
+
+    // Where the visitor came from — UTM params / landing page / referrer are
+    // filled into hidden fields by the website's form script.
+    $sourceDetailParts = [];
+    foreach (['utm_source', 'utm_medium', 'utm_campaign', 'landing_page', 'referrer'] as $field) {
+        $value = trim((string)($_POST[$field] ?? ''));
+        if ($value !== '') {
+            $sourceDetailParts[] = "$field=$value";
+        }
+    }
+    $source = 'website';
+    $sourceDetail = substr(implode('; ', $sourceDetailParts), 0, 500);
+
     // Determine enquiry type
     $enquiry_type = isset($_POST['address']) && !empty($_POST['address']) ? 'residential' : 'commercial';
 
@@ -164,23 +203,23 @@ try {
          heavyload, timeline, epoxy_type, thickness, message, budget, concrete_grade, slab_age,
          cracks, contamination, previous_coating, industry_type, forklift, max_load,
          chemical_exposure, moisture_issue, water_washing, anti_skid, preferred_color, finish_type,
-         line_marking, start_date, urgent, working_hours)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+         line_marking, start_date, urgent, working_hours, source, source_detail)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
     );
 
     if (!$stmt) {
         throw new Exception("Prepare failed: " . $conn->error);
     }
 
-    // Bind 35 parameters (company_id + type + 33 fields)
+    // Bind 37 parameters (company_id + type + 33 fields + source + source_detail)
     $stmt->bind_param(
-        "issssssssssssssssssssssssssssssssss",
+        "issssssssssssssssssssssssssssssssssss",
         $companyId, $enquiry_type, $name, $phone, $email, $location, $address, $area, $slab,
         $industry_usage, $work_type, $heavyload, $timeline, $epoxy_type, $thickness,
         $message, $budget, $concrete_grade, $slab_age, $cracks, $contamination,
         $previous_coating, $industry_type, $forklift, $max_load, $chemical_exposure,
         $moisture_issue, $water_washing, $anti_skid, $preferred_color, $finish_type,
-        $line_marking, $start_date, $urgent, $working_hours
+        $line_marking, $start_date, $urgent, $working_hours, $source, $sourceDetail
     );
 
     if (!$stmt->execute()) {
@@ -198,10 +237,15 @@ try {
         $address !== '' ? "Address: $address" : '',
         $work_type !== '' ? "Work Type: $work_type" : '',
         $epoxy_type !== '' ? "Epoxy Type: $epoxy_type" : '',
+        $thickness !== '' ? "Thickness: $thickness" : '',
+        $industry_type !== '' ? "Industry: $industry_type" : '',
+        $finish_type !== '' ? "Finish: $finish_type" : '',
+        $anti_skid !== '' ? "Anti-skid: $anti_skid" : '',
         $budget !== '' ? "Budget: $budget" : '',
         $timeline !== '' ? "Timeline: $timeline" : '',
         $area !== '' ? "Area: $area" : '',
         $message !== '' ? "Message: $message" : '',
+        $sourceDetail !== '' ? "Source: $sourceDetail" : '',
     ]);
     $erpNotes = implode("\n", $erpNotesParts);
     // Prefer the full street address (residential form) over the

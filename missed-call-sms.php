@@ -52,6 +52,10 @@ if (!$tenant || empty($tenant['form_token'])) {
     jsonExit(false, 'Tenant not found or no form token', 404);
 }
 
+// Log the lead before the message rate-limit check — every missed call
+// deserves a callback, even when we've already WhatsApp'd this number.
+createEnquiryFromMissedCall($conn, $companyId, $caller);
+
 if (!shouldSendMissedCallMessage($conn, $companyId, $caller)) {
     jsonExit(true, 'Skipped — already sent twice this 30-day cycle for ' . $caller);
 }

@@ -285,6 +285,65 @@ function sendQuoteFollowupWhatsApp(string $phone, string $name, string $tenantNa
     }
 }
 
+/* Google review request, sent once by reminder.php a few days after a lead
+   becomes 'Work Done'. Template params: [customer name, company name,
+   review link]. Off until WA_TEMPLATE_REVIEW_REQUEST and GOOGLE_REVIEW_URL
+   are set in config.php. Best-effort like the other WhatsApp senders. */
+function reviewRequestEnabled(): bool {
+    return defined('WA_TEMPLATE_REVIEW_REQUEST') && WA_TEMPLATE_REVIEW_REQUEST !== ''
+        && defined('GOOGLE_REVIEW_URL') && GOOGLE_REVIEW_URL !== '';
+}
+
+function sendReviewRequestWhatsApp(string $phone, string $name, string $tenantName): bool {
+    if (!reviewRequestEnabled()) {
+        return false;
+    }
+    $recipient = normalizeIndianPhoneForSms($phone);
+    if ($recipient === null) {
+        return false;
+    }
+    try {
+        return sendViaWhatsAppCloudApi(
+            $recipient,
+            WA_TEMPLATE_REVIEW_REQUEST,
+            WA_TEMPLATE_LANG,
+            [$name !== '' ? $name : 'Customer', $tenantName, GOOGLE_REVIEW_URL]
+        );
+    } catch (\Throwable $e) {
+        error_log('sendReviewRequestWhatsApp failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/* Win-back offer to an old Closed / Not Interested lead, sent only when
+   staff pick leads on reengage.php. Must be an approved MARKETING template
+   that tells the customer to reply STOP to opt out. Params: [customer name,
+   company name]. Off until WA_TEMPLATE_REENGAGE is set in config.php. */
+function reengageEnabled(): bool {
+    return defined('WA_TEMPLATE_REENGAGE') && WA_TEMPLATE_REENGAGE !== '';
+}
+
+function sendReengageWhatsApp(string $phone, string $name, string $tenantName): bool {
+    if (!reengageEnabled()) {
+        return false;
+    }
+    $recipient = normalizeIndianPhoneForSms($phone);
+    if ($recipient === null) {
+        return false;
+    }
+    try {
+        return sendViaWhatsAppCloudApi(
+            $recipient,
+            WA_TEMPLATE_REENGAGE,
+            WA_TEMPLATE_LANG,
+            [$name !== '' ? $name : 'Customer', $tenantName]
+        );
+    } catch (\Throwable $e) {
+        error_log('sendReengageWhatsApp failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
 /* Sends the WhatsApp missed-call thank-you template, triggered by
    missed-call-sms.php's MacroDroid webhook when a call to the business
    number goes unanswered. No caller name is known at that point, so the

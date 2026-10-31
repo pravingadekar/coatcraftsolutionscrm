@@ -174,3 +174,31 @@ define('ERP_LEAD_USER_ID', 'CHANGE_ME');     // usually same as ERP_LEAD_CREATED
 define('ERP_LEAD_PIPELINE_ID', 'CHANGE_ME'); // ERP pipelines.id to file new leads under
 define('ERP_LEAD_STAGE_ID', 'CHANGE_ME');    // ERP stages.id, typically the first/"Draft" stage
 define('ERP_LEAD_SOURCE_ID', 'CHANGE_ME');   // ERP sources.id, e.g. a "Websites" source
+
+// Per-channel ERP sources.id for synced leads (see erpSourceIdForChannel() in
+// leads.php). Any channel left undefined falls back to ERP_LEAD_SOURCE_ID.
+// CoatCraft's ERP already has 14 = "Phone" and 12 = "Facebook".
+// define('ERP_SOURCE_ID_WHATSAPP', 'CHANGE_ME');
+// define('ERP_SOURCE_ID_VOICE', 14);
+// define('ERP_SOURCE_ID_MISSED_CALL', 14);
+// define('ERP_SOURCE_ID_META_ADS', 12);
+
+// Google review request (reminder.php), sent once on WhatsApp
+// REVIEW_REQUEST_DELAY_DAYS after a lead is first marked 'Work Done'.
+// Template body params: {{1}} customer name, {{2}} company name, {{3}} review link.
+// Leave either value empty to keep the feature off.
+define('WA_TEMPLATE_REVIEW_REQUEST', '');
+define('GOOGLE_REVIEW_URL', '');            // e.g. https://g.page/r/XXXX/review
+define('REVIEW_REQUEST_DELAY_DAYS', 2);
+
+// Meta Lead Ads (meta-leads-webhook.php). Subscribe the Facebook Page to the
+// "leadgen" webhook field with this verify token. The Page access token needs
+// the leads_retrieval permission. META_APP_SECRET defaults to WA_APP_SECRET.
+define('META_LEADS_VERIFY_TOKEN', '');
+define('META_PAGE_ACCESS_TOKEN', '');
+define('META_APP_SECRET', '');
+
+// Win-back offers (reengage.php). Must be an approved WhatsApp MARKETING
+// template with params {{1}} customer name, {{2}} company name, and text
+// telling the customer to reply STOP to opt out. Empty = sending off.
+define('WA_TEMPLATE_REENGAGE', '');

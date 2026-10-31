@@ -499,11 +499,9 @@ button{
         <form method="POST">
             <input type="hidden" name="id" value="<?= $row['id'] ?>">
             <select name="status" onchange="this.form.submit()">
-                <option <?= $row['status']=='New'?'selected':'' ?>>New</option>
-                <option <?= $row['status']=='Contacted'?'selected':'' ?>>Contacted</option>
-                <option <?= $row['status']=='Closed'?'selected':'' ?>>Closed</option>
-                <option <?= $row['status']=='Not Interested'?'selected':'' ?>>Not Interested</option>
-                <option <?= $row['status']=='Work Done'?'selected':'' ?>>Work Done</option>
+                <?php foreach (LEAD_STATUSES as $s): ?>
+                    <option <?= $row['status']==$s?'selected':'' ?>><?= htmlspecialchars($s) ?></option>
+                <?php endforeach; ?>
             </select>
             <input type="hidden" name="update_status" value="1">
         </form>

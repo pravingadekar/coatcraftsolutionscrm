@@ -335,7 +335,7 @@ $followupTasks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); $stmt->close();
 $stmt = $conn->prepare("SELECT * FROM daily_notes WHERE company_id=? ORDER BY created_at DESC LIMIT 12");
 $stmt->bind_param('i', $companyId); $stmt->execute();
 $dailyNotes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); $stmt->close();
-$statusGroups = ['New'=>[], 'Contacted'=>[], 'Closed'=>[]];
+$statusGroups = ['New'=>[], 'Contacted'=>[], 'Quoted'=>[], 'Won'=>[], 'Closed'=>[]];
 foreach ($allLeads as $lead) {
     if (!isset($statusGroups[$lead['status']])) {
         $statusGroups[$lead['status']] = [];
@@ -373,6 +373,9 @@ function badgeClass($status) {
         case 'Closed': return 'status-closed';
         case 'Not Interested': return 'status-not-interested';
         case 'Work Done': return 'status-work-done';
+        case 'Quoted': return 'status-quoted';
+        case 'Won': return 'status-won';
+        case 'Paid': return 'status-paid';
         default: return 'status-new';
     }
 }
@@ -395,7 +398,7 @@ function renderTable($rows) {
         $html .= '<form method="POST" style="display:inline;">';
         $html .= '<input type="hidden" name="id" value="' . intval($row['id']) . '">';
         $html .= '<select name="status" onchange="this.form.submit()" style="padding:4px 8px;border:1px solid #d9e2ea;border-radius:6px;font-size:12px;">';
-        $statuses = ['New', 'Contacted', 'Closed', 'Not Interested', 'Work Done'];
+        $statuses = LEAD_STATUSES;
         foreach ($statuses as $s) {
             $selected = $row['status'] == $s ? 'selected' : '';
             $html .= '<option value="' . htmlspecialchars($s) . '" ' . $selected . '>' . htmlspecialchars($s) . '</option>';
@@ -508,6 +511,9 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
 .status-closed{background:#fff7e6;color:#92400e;}
 .status-not-interested{background:#fce7e7;color:#9b2c2c;}
 .status-work-done{background:#ecfdf5;color:#166534;}
+.status-quoted{background:#eff6ff;color:#1d4ed8;}
+.status-won{background:#fef9c3;color:#854d0e;}
+.status-paid{background:#dcfce7;color:#14532d;}
 .note-list{list-style:none;padding:0;margin:0;}
 .note-list li{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:16px;margin-bottom:12px;}
 .note-list li small{display:block;margin-top:10px;color:var(--muted);}
@@ -636,6 +642,10 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
             <div class="section-title">Quick Actions</div>
             <a class="link-button" href="whatsapp-chats.php"><i class="fa-brands fa-whatsapp"></i>WhatsApp Chats<?= $unreadWhatsAppCount > 0 ? ' <span style="background:#22a559;color:#fff;font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;margin-left:auto;">' . $unreadWhatsAppCount . '</span>' : '' ?></a>
             <a class="link-button" href="view-leads.php"><i class="fa-solid fa-table-list"></i>Open Lead Board</a>
+            <a class="link-button" href="lead-report.php"><i class="fa-solid fa-chart-column"></i>Lead Report</a>
+            <?php if (in_array(current_user()['role'], ['owner', 'admin'], true)): ?>
+                <a class="link-button" href="reengage.php"><i class="fa-solid fa-bullhorn"></i>Win-back Offers</a>
+            <?php endif; ?>
             <a class="link-button" href="export.php"><i class="fa-solid fa-file-export"></i>Export Leads</a>
         </div>
 
@@ -1025,7 +1035,7 @@ th{background:#f8fafc;color:#0f172a;font-weight:600;}
             <div class="panel">
                 <h3 class="section-title-2">Kanban Stage View</h3>
                 <div class="kanban-board">
-                    <?php foreach (['New', 'Contacted', 'Closed'] as $stage): ?>
+                    <?php foreach (['New', 'Contacted', 'Quoted', 'Won', 'Closed'] as $stage): ?>
                         <div class="kanban-column">
                             <h4><?= $stage ?></h4>
                             <?php if (!empty($statusGroups[$stage])): ?>

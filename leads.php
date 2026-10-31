@@ -86,9 +86,19 @@ function completeLeadFollowup(mysqli $conn, int $companyId, int $taskId): bool {
     return $updated;
 }
 
+// Pipeline order. Quoted / Won / Paid are also set automatically by the
+// CRM (App\Services\DashboardSyncService) when a quotation is sent,
+// accepted, and its invoice fully paid.
+const LEAD_STATUSES = ['New', 'Contacted', 'Quoted', 'Won', 'Paid', 'Work Done', 'Closed', 'Not Interested'];
+
 function updateLeadStatus(mysqli $conn, int $companyId, int $leadId, string $status): bool {
-    $stmt = $conn->prepare("UPDATE enquiries SET status=? WHERE id=? AND company_id=?");
-    $stmt->bind_param('sii', $status, $leadId, $companyId);
+    if (!in_array($status, LEAD_STATUSES, true)) {
+        return false;
+    }
+    // First move to 'Work Done' starts the Google review request timer
+    // (reminder.php); later edits never reset it.
+    $stmt = $conn->prepare("UPDATE enquiries SET status=?, work_done_at = IF(?='Work Done', COALESCE(work_done_at, NOW()), work_done_at) WHERE id=? AND company_id=?");
+    $stmt->bind_param('ssii', $status, $status, $leadId, $companyId);
     $stmt->execute();
     $updated = $stmt->affected_rows > 0;
     $stmt->close();
@@ -221,7 +231,9 @@ function findLeadIdByPhone(mysqli $conn, int $companyId, string $phone): ?int {
 // the visitor. Only fires for ERP_SYNC_COMPANY_ID (see config.php) since
 // this CRM app itself is multi-tenant and other tenants' enquiries must
 // never leak into this one ERP instance.
-function syncEnquiryToErpLead(mysqli $conn, int $companyId, int $enquiryId, string $name, string $phone, string $email, string $type, string $notes, string $location = ''): void {
+// $channel ('website', 'whatsapp', 'voice', 'missed_call', 'meta_ads') picks
+// the ERP lead subject and source — see erpSourceIdForChannel().
+function syncEnquiryToErpLead(mysqli $conn, int $companyId, int $enquiryId, string $name, string $phone, string $email, string $type, string $notes, string $location = '', string $channel = 'website'): void {
     if (!defined('ERP_SYNC_ENABLED') || !ERP_SYNC_ENABLED) {
         return;
     }
@@ -231,7 +243,12 @@ function syncEnquiryToErpLead(mysqli $conn, int $companyId, int $enquiryId, stri
 
     try {
         $db      = ERP_DB_NAME;
-        $subject = 'Website Enquiry (' . ucfirst($type) . ')';
+        $labels  = ['website' => 'Website', 'whatsapp' => 'WhatsApp', 'voice' => 'AI Voice Call', 'missed_call' => 'Missed Call', 'meta_ads' => 'Meta Ads'];
+        $subject = ($labels[$channel] ?? 'Website') . ' Enquiry (' . ucfirst($type) . ')';
+        // ERP leads.name is required; bot/voice leads arrive without one.
+        if ($name === '') {
+            $name = 'Lead ' . $phone;
+        }
 
         $stmt = $conn->prepare(
             "INSERT INTO `{$db}`.`leads`
@@ -245,7 +262,7 @@ function syncEnquiryToErpLead(mysqli $conn, int $companyId, int $enquiryId, stri
         $userId     = (int) ERP_LEAD_USER_ID;
         $pipelineId = (int) ERP_LEAD_PIPELINE_ID;
         $stageId    = (int) ERP_LEAD_STAGE_ID;
-        $sources    = (string) ERP_LEAD_SOURCE_ID;
+        $sources    = (string) erpSourceIdForChannel($channel);
         $createdBy  = (int) ERP_LEAD_CREATED_BY;
 
         $stmt->bind_param(
@@ -269,6 +286,24 @@ function syncEnquiryToErpLead(mysqli $conn, int $companyId, int $enquiryId, stri
         }
     } catch (\Throwable $e) {
         error_log('ERP lead sync failed for enquiry #' . $enquiryId . ': ' . $e->getMessage());
+    }
+}
+
+// Per-channel ERP sources.id, e.g. define('ERP_SOURCE_ID_WHATSAPP', 14) in
+// config.php. Falls back to ERP_LEAD_SOURCE_ID ("Websites") when a channel
+// has no source of its own yet.
+function erpSourceIdForChannel(string $channel): int {
+    $const = 'ERP_SOURCE_ID_' . strtoupper($channel);
+    return defined($const) ? (int) constant($const) : (int) ERP_LEAD_SOURCE_ID;
+}
+
+// Bot/voice/missed-call leads are created without going through sendmail.php,
+// so they sync here — only when the enquiry row is brand new, never for a
+// note added to an existing lead (that lead was already synced, or predates
+// the sync and shouldn't be duplicated).
+function syncNewChannelEnquiryToErp(mysqli $conn, int $companyId, int $enquiryId, string $phone, string $notes, string $channel): void {
+    if ($enquiryId > 0) {
+        syncEnquiryToErpLead($conn, $companyId, $enquiryId, '', $phone, '', 'commercial', $notes, '', $channel);
     }
 }
 
@@ -595,11 +630,12 @@ function captureWhatsAppBotInterest(mysqli $conn, int $companyId, string $phone,
         // on their DB defaults) — same convention as sendmail.php's enquiries
         // insert, and avoids assuming updated_at exists (some older tenant DBs
         // predate that column and were never migrated).
-        $stmt = $conn->prepare("INSERT INTO enquiries (company_id, type, name, phone, email, message, status) VALUES (?, 'commercial', '', ?, '', ?, 'New')");
+        $stmt = $conn->prepare("INSERT INTO enquiries (company_id, type, name, phone, email, message, status, source) VALUES (?, 'commercial', '', ?, '', ?, 'New', 'whatsapp')");
         $stmt->bind_param('iss', $companyId, $phone, $noteText);
         $stmt->execute();
         $enquiryId = $stmt->insert_id;
         $stmt->close();
+        syncNewChannelEnquiryToErp($conn, $companyId, $enquiryId, $phone, $noteText, 'whatsapp');
     }
     notifyStaffOfBotInterest($companyId, 'WhatsApp bot lead interest', $noteText . ' — ' . $phone);
     return $enquiryId;
@@ -626,13 +662,118 @@ function createEnquiryFromVoiceCall(mysqli $conn, int $companyId, string $phone,
     if ($enquiryId !== null) {
         addLeadUpdate($conn, $companyId, $enquiryId, "AI voice call: " . $summary);
     } else {
-        $stmt = $conn->prepare("INSERT INTO enquiries (company_id, type, name, phone, email, message, status) VALUES (?, 'commercial', '', ?, '', ?, 'New')");
+        $stmt = $conn->prepare("INSERT INTO enquiries (company_id, type, name, phone, email, message, status, source) VALUES (?, 'commercial', '', ?, '', ?, 'New', 'voice')");
         $stmt->bind_param('iss', $companyId, $phone, $summary);
         $stmt->execute();
         $enquiryId = $stmt->insert_id;
         $stmt->close();
+        syncNewChannelEnquiryToErp($conn, $companyId, $enquiryId, $phone, "AI voice call: " . $summary, 'voice');
     }
     notifyStaffOfBotInterest($companyId, 'AI voice call handled', $summary . ' — ' . $phone);
+    return $enquiryId;
+}
+
+// Missed call on the business line (missed-call-sms.php) — logs the caller as
+// a lead so a callback isn't forgotten, even if they never fill the form the
+// WhatsApp message links to. No push here: missed-call-sms.php doesn't load
+// the web-push vendor/config that notifyStaffOfBotInterest() needs.
+function createEnquiryFromMissedCall(mysqli $conn, int $companyId, string $phone): int {
+    $note = 'Missed call — call back';
+    $enquiryId = findLeadIdByPhone($conn, $companyId, $phone);
+    if ($enquiryId !== null) {
+        addLeadUpdate($conn, $companyId, $enquiryId, $note);
+        return $enquiryId;
+    }
+    $stmt = $conn->prepare("INSERT INTO enquiries (company_id, type, name, phone, email, message, status, source) VALUES (?, 'commercial', '', ?, '', ?, 'New', 'missed_call')");
+    $stmt->bind_param('iss', $companyId, $phone, $note);
+    $stmt->execute();
+    $enquiryId = $stmt->insert_id;
+    $stmt->close();
+    syncNewChannelEnquiryToErp($conn, $companyId, $enquiryId, $phone, $note, 'missed_call');
+    return $enquiryId;
+}
+
+// Customer replied STOP / UNSUBSCRIBE on WhatsApp (whatsapp-webhook.php).
+function isWhatsAppOptOutMessage(string $body): bool {
+    return in_array(strtoupper(trim($body)), ['STOP', 'UNSUBSCRIBE', 'STOP ALL'], true);
+}
+
+function recordWhatsAppOptOut(mysqli $conn, int $companyId, string $phone): void {
+    $last10 = substr(preg_replace('/\D+/', '', $phone), -10);
+    if (strlen($last10) !== 10) {
+        return;
+    }
+    $stmt = $conn->prepare("INSERT IGNORE INTO whatsapp_opt_outs (company_id, phone_last10) VALUES (?, ?)");
+    $stmt->bind_param('is', $companyId, $last10);
+    $stmt->execute();
+    $stmt->close();
+}
+
+// Old Closed / Not Interested leads eligible for a win-back WhatsApp offer
+// (reengage.php): older than $minAgeDays, not offered in the last 90 days,
+// and never opted out.
+function getReengageCandidates(mysqli $conn, int $companyId, int $minAgeDays = 60): array {
+    $stmt = $conn->prepare(
+        "SELECT e.id, e.name, e.phone, e.location, e.status, e.created_at, e.last_reengaged_at
+         FROM enquiries e
+         LEFT JOIN whatsapp_opt_outs o ON o.company_id = e.company_id AND o.phone_last10 = RIGHT(e.phone, 10)
+         WHERE e.company_id = ? AND e.status IN ('Closed', 'Not Interested') AND e.phone <> ''
+           AND e.created_at <= DATE_SUB(NOW(), INTERVAL ? DAY)
+           AND (e.last_reengaged_at IS NULL OR e.last_reengaged_at <= DATE_SUB(NOW(), INTERVAL 90 DAY))
+           AND o.id IS NULL
+         ORDER BY e.created_at DESC LIMIT 200"
+    );
+    $stmt->bind_param('ii', $companyId, $minAgeDays);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $rows;
+}
+
+// Meta Lead Ads lead (meta-leads-webhook.php). $fields is the lead form's
+// field_data flattened to name => value. Standard Meta fields map to their
+// columns; every other answer (area, floor type...) goes into the message,
+// and an answer whose question mentions "area"/"sq" fills the area column so
+// the CRM's Auto Quote can read it. An existing lead with the same phone just
+// gets a note.
+function createEnquiryFromMetaLead(mysqli $conn, int $companyId, array $fields, string $sourceDetail): int {
+    $name = trim($fields['full_name'] ?? trim(($fields['first_name'] ?? '') . ' ' . ($fields['last_name'] ?? '')));
+    $phone = trim($fields['phone_number'] ?? '');
+    $email = trim($fields['email'] ?? '');
+    $location = trim($fields['city'] ?? ($fields['street_address'] ?? ''));
+
+    $area = '';
+    $answers = [];
+    foreach ($fields as $key => $value) {
+        if (in_array($key, ['full_name', 'first_name', 'last_name', 'phone_number', 'email', 'city', 'street_address'], true)) {
+            continue;
+        }
+        if ($area === '' && preg_match('/area|sq/i', $key)) {
+            $area = $value;
+        }
+        $answers[] = ucfirst(str_replace('_', ' ', $key)) . ': ' . $value;
+    }
+    $message = implode("\n", $answers);
+
+    $existingId = $phone !== '' ? findLeadIdByPhone($conn, $companyId, $phone) : null;
+    if ($existingId !== null) {
+        addLeadUpdate($conn, $companyId, $existingId, 'New Meta Ads enquiry' . ($message !== '' ? ":\n" . $message : ''));
+        return $existingId;
+    }
+
+    $stmt = $conn->prepare("INSERT INTO enquiries (company_id, type, name, phone, email, location, area, message, status, source, source_detail) VALUES (?, 'commercial', ?, ?, ?, ?, ?, ?, 'New', 'meta_ads', ?)");
+    $stmt->bind_param('isssssss', $companyId, $name, $phone, $email, $location, $area, $message, $sourceDetail);
+    $stmt->execute();
+    $enquiryId = $stmt->insert_id;
+    $stmt->close();
+
+    $notes = implode("\n", array_filter([
+        $location !== '' ? "Location: $location" : '',
+        $area !== '' ? "Area: $area" : '',
+        $message,
+        $sourceDetail !== '' ? "Source: $sourceDetail" : '',
+    ]));
+    syncEnquiryToErpLead($conn, $companyId, $enquiryId, $name, $phone, $email, 'commercial', $notes, $location, 'meta_ads');
     return $enquiryId;
 }
 

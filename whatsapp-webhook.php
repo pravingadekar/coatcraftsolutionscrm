@@ -87,6 +87,15 @@ foreach (($payload['entry'] ?? []) as $entry) {
             $enquiryId = findLeadIdByPhone($conn, $companyId, $from);
             $isNewInboundMessage = logWhatsAppInbound($conn, $companyId, $enquiryId, $from, $waMessageId, $body);
 
+            // STOP = opt out of marketing (reengage.php); no bot reply to it.
+            if ($isNewInboundMessage && isWhatsAppOptOutMessage($body)) {
+                recordWhatsAppOptOut($conn, $companyId, $from);
+                if ($enquiryId !== null) {
+                    addLeadUpdate($conn, $companyId, $enquiryId, 'Customer opted out of WhatsApp offers (STOP)');
+                }
+                continue;
+            }
+
             // Guided-menu bot (whatsapp-bot-router.php): replies to every
             // inbound message (known leads included, per explicit user
             // request) unless staff have paused it for this phone (either by
