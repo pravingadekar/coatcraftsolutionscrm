@@ -915,7 +915,7 @@ function buildOwnerDailySummary(mysqli $conn, int $companyId): array {
     };
     $newLeads = $fetch("SELECT name, phone, location, area FROM enquiries WHERE company_id = ? AND DATE(created_at) = ? ORDER BY created_at", $yesterday);
     $visits = $fetch("SELECT e.name, e.phone, e.location, e.area, sv.visit_time FROM enquiry_site_visits sv JOIN enquiries e ON sv.enquiry_id = e.id AND e.company_id = sv.company_id WHERE sv.company_id = ? AND sv.visit_date = ? ORDER BY sv.visit_time", $today);
-    $quotes = $fetch("SELECT e.name, e.phone, e.location, e.area, MAX(sv.visit_date) AS visited FROM enquiries e JOIN enquiry_site_visits sv ON sv.enquiry_id = e.id AND sv.company_id = e.company_id WHERE e.company_id = ? AND e.status IN ('New', 'Contacted') AND sv.visit_date < ? GROUP BY e.id ORDER BY visited DESC", $today);
+    $quotes = getQuotationsToSend($conn, $companyId, $today);
     $followups = $fetch("SELECT e.name, e.phone, e.location, e.area, ef.note FROM enquiry_followups ef JOIN enquiries e ON ef.enquiry_id = e.id AND e.company_id = ef.company_id WHERE ef.company_id = ? AND ef.status = 'Open' AND ef.due_date <= ? ORDER BY ef.due_date", $today);
 
     // One lead = name line, then location/area and phone on their own lines.
@@ -965,6 +965,49 @@ function buildOwnerDailySummary(mysqli $conn, int $companyId): array {
         'text' => $text,
         'params' => [$dateLabel, (string) count($newLeads), (string) count($visits), (string) count($quotes), (string) count($followups)],
     ];
+}
+
+/* Leads with a site visit before $today, still New/Contacted here, and — for
+   the ERP-synced company — no quotation sent from the ERP yet. The ERP only
+   flips a lead to 'Quoted' for quotes sent after that sync went live, and
+   only for customers converted from an ERP lead, so older quotes and
+   directly-created customers are matched here too: a proposal with status
+   >= 1 (Open/Accepted/Declined/Close; 0 = Draft, not sent) for the lead's
+   converted customer, or for an ERP customer with the same phone. Falls
+   back to the plain status check if the ERP database can't be read. */
+function getQuotationsToSend(mysqli $conn, int $companyId, string $today): array {
+    $base = "SELECT e.name, e.phone, e.location, e.area, MAX(sv.visit_date) AS visited FROM enquiries e JOIN enquiry_site_visits sv ON sv.enquiry_id = e.id AND sv.company_id = e.company_id WHERE e.company_id = ? AND e.status IN ('New', 'Contacted') AND sv.visit_date < ?";
+    $tail = " GROUP BY e.id ORDER BY visited DESC";
+
+    $useErp = defined('ERP_SYNC_ENABLED') && ERP_SYNC_ENABLED && $companyId === (int) ERP_SYNC_COMPANY_ID;
+    if ($useErp) {
+        try {
+            $db = ERP_DB_NAME;
+            $createdBy = (int) ERP_LEAD_CREATED_BY;
+            $digits = fn($col) => "RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE($col, ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), 10)";
+            $notQuoted = " AND NOT EXISTS (
+                SELECT 1 FROM `{$db}`.proposals p LEFT JOIN `{$db}`.customers c ON c.id = p.customer_id
+                WHERE p.created_by = ? AND p.status >= 1 AND (
+                    p.customer_id = (SELECT l.converted_customer_id FROM `{$db}`.leads l WHERE l.id = e.erp_lead_id)
+                    OR ({$digits('e.phone')} <> '' AND ({$digits('c.contact')} = {$digits('e.phone')}
+                        OR {$digits('c.billing_phone')} = {$digits('e.phone')}))))";
+            $stmt = $conn->prepare($base . $notQuoted . $tail);
+            $stmt->bind_param('isi', $companyId, $today, $createdBy);
+            $stmt->execute();
+            $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $stmt->close();
+            return $rows;
+        } catch (\Throwable $e) {
+            error_log('getQuotationsToSend ERP check failed: ' . $e->getMessage());
+        }
+    }
+
+    $stmt = $conn->prepare($base . $tail);
+    $stmt->bind_param('is', $companyId, $today);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $rows;
 }
 
 /* True when this inbound WhatsApp is the owner (DAILY_SUMMARY_PHONE) asking
