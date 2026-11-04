@@ -893,3 +893,87 @@ function addDailyNote(mysqli $conn, int $companyId, string $title, string $note)
     $stmt->close();
     return true;
 }
+
+/* Owner's daily CRM summary (reminder.php's morning send, and the owner
+   replying "summary" on WhatsApp — whatsapp-webhook.php). Returns 'text':
+   the full list, one block per lead, for a free-form message; and 'params':
+   [date, 4 counts] for the WA_TEMPLATE_DAILY_SUMMARY template, which can't
+   carry line breaks so it only holds the counts. "Quotations to send" = site
+   visit done but lead still New/Contacted. Dates are IST. */
+function buildOwnerDailySummary(mysqli $conn, int $companyId): array {
+    $now = new DateTime('now', new DateTimeZone('Asia/Kolkata'));
+    $today = $now->format('Y-m-d');
+    $yesterday = (clone $now)->modify('-1 day')->format('Y-m-d');
+
+    $fetch = function ($sql, $date) use ($conn, $companyId) {
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param('is', $companyId, $date);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        return $rows;
+    };
+    $newLeads = $fetch("SELECT name, phone, location, area FROM enquiries WHERE company_id = ? AND DATE(created_at) = ? ORDER BY created_at", $yesterday);
+    $visits = $fetch("SELECT e.name, e.phone, e.location, e.area, sv.visit_time FROM enquiry_site_visits sv JOIN enquiries e ON sv.enquiry_id = e.id AND e.company_id = sv.company_id WHERE sv.company_id = ? AND sv.visit_date = ? ORDER BY sv.visit_time", $today);
+    $quotes = $fetch("SELECT e.name, e.phone, e.location, e.area, MAX(sv.visit_date) AS visited FROM enquiries e JOIN enquiry_site_visits sv ON sv.enquiry_id = e.id AND sv.company_id = e.company_id WHERE e.company_id = ? AND e.status IN ('New', 'Contacted') AND sv.visit_date < ? GROUP BY e.id ORDER BY visited DESC", $today);
+    $followups = $fetch("SELECT e.name, e.phone, e.location, e.area, ef.note FROM enquiry_followups ef JOIN enquiries e ON ef.enquiry_id = e.id AND e.company_id = ef.company_id WHERE ef.company_id = ? AND ef.status = 'Open' AND ef.due_date <= ? ORDER BY ef.due_date", $today);
+
+    // One lead = name line, then location/area and phone on their own lines.
+    $leadBlock = function ($n, $row, $extraLine = '') {
+        $name = trim((string) $row['name']) !== '' ? trim($row['name']) : 'No name';
+        $place = array_filter([
+            trim((string) ($row['location'] ?? '')) !== '' ? '📍 ' . trim($row['location']) : '',
+            trim((string) ($row['area'] ?? '')) !== '' ? '📐 ' . trim($row['area']) : '',
+        ]);
+        $lines = ["$n. *$name*"];
+        if ($place) {
+            $lines[] = '    ' . implode('  |  ', $place);
+        }
+        $lines[] = '    📞 ' . $row['phone'];
+        if ($extraLine !== '') {
+            $lines[] = '    ' . $extraLine;
+        }
+        return implode("\n", $lines);
+    };
+    $section = function ($icon, $title, $rows, $extra = null) use ($leadBlock) {
+        $text = "$icon *$title: " . count($rows) . '*';
+        $shown = array_slice($rows, 0, 10);
+        foreach ($shown as $i => $row) {
+            $text .= "\n\n" . $leadBlock($i + 1, $row, $extra ? $extra($row) : '');
+        }
+        if (count($rows) > count($shown)) {
+            $text .= "\n\n…and " . (count($rows) - count($shown)) . ' more in the CRM';
+        }
+        return $text;
+    };
+
+    $dateLabel = $now->format('d M Y');
+    $divider = "\n\n━━━━━━━━━━━━\n\n";
+    $text = "📊 *CRM Summary – $dateLabel*" . $divider
+        . $section('🆕', 'New enquiries yesterday', $newLeads) . $divider
+        . $section('🚗', 'Site visits today', $visits, fn($r) => '🕐 ' . date('g:i A', strtotime($r['visit_time']))) . $divider
+        . $section('📝', 'Quotations to send', $quotes, fn($r) => '🗓 Visited ' . date('d M', strtotime($r['visited']))) . $divider
+        . $section('🔔', 'Follow-ups due', $followups, fn($r) => '💬 ' . preg_replace('/\s+/', ' ', trim($r['note']))) . $divider
+        . '🔗 ' . rtrim(SITE_URL, '/') . '/crm-dashboard.php';
+
+    // WhatsApp caps a text message at 4096 characters.
+    if (mb_strlen($text) > 4000) {
+        $text = mb_substr($text, 0, 3950) . "\n\n…(cut short, see the CRM)";
+    }
+
+    return [
+        'text' => $text,
+        'params' => [$dateLabel, (string) count($newLeads), (string) count($visits), (string) count($quotes), (string) count($followups)],
+    ];
+}
+
+/* True when this inbound WhatsApp is the owner (DAILY_SUMMARY_PHONE) asking
+   for the full summary list. */
+function isOwnerSummaryRequest(string $fromPhone, string $body): bool {
+    if (!defined('DAILY_SUMMARY_PHONE') || DAILY_SUMMARY_PHONE === '') {
+        return false;
+    }
+    $owner = substr(preg_replace('/\D/', '', DAILY_SUMMARY_PHONE), -10);
+    return substr(preg_replace('/\D/', '', $fromPhone), -10) === $owner
+        && preg_match('/^\s*(summary|details|report)\s*[.!]?\s*$/i', $body) === 1;
+}

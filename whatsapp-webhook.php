@@ -96,6 +96,14 @@ foreach (($payload['entry'] ?? []) as $entry) {
                 continue;
             }
 
+            // Owner replying "summary" gets the full daily list (the morning
+            // template only carries counts); the bot stays out of it.
+            if ($isNewInboundMessage && isOwnerSummaryRequest($from, $body)
+                && (int) $companyId === (int) DAILY_SUMMARY_COMPANY_ID) {
+                sendViaWhatsAppCloudApiText($from, buildOwnerDailySummary($conn, $companyId)['text']);
+                continue;
+            }
+
             // Guided-menu bot (whatsapp-bot-router.php): replies to every
             // inbound message (known leads included, per explicit user
             // request) unless staff have paused it for this phone (either by

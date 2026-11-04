@@ -443,4 +443,13 @@ if (!$hasReengagedColumn) {
 if (!$hasWorkDoneAtColumn) {
     $conn->query("ALTER TABLE enquiries ADD COLUMN work_done_at DATETIME DEFAULT NULL AFTER source_detail, ADD COLUMN review_requested_at DATETIME DEFAULT NULL AFTER work_done_at");
 }
+
+// One row per company per day the owner's morning WhatsApp summary went out
+// (reminder.php), so the hourly cron sends it only once a day.
+$conn->query("CREATE TABLE IF NOT EXISTS owner_daily_summary_log (
+    company_id INT NOT NULL,
+    summary_date DATE NOT NULL,
+    sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_id, summary_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 ?>

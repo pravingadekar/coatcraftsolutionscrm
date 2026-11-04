@@ -202,3 +202,13 @@ define('META_APP_SECRET', '');
 // template with params {{1}} customer name, {{2}} company name, and text
 // telling the customer to reply STOP to opt out. Empty = sending off.
 define('WA_TEMPLATE_REENGAGE', '');
+
+// Owner's morning WhatsApp summary (reminder.php, sent by the hourly cron on
+// its first run at/after DAILY_SUMMARY_HOUR IST). Outside the 24h chat
+// window it needs an approved template with {{1}} date, {{2}} new
+// enquiries, {{3}} site visits, {{4}} quotations to send, {{5}} follow-ups.
+// Empty DAILY_SUMMARY_PHONE = off.
+define('DAILY_SUMMARY_PHONE', '7745889111');
+define('DAILY_SUMMARY_COMPANY_ID', 1); // your company's ID in the companies table
+define('DAILY_SUMMARY_HOUR', 8);
+define('WA_TEMPLATE_DAILY_SUMMARY', '');

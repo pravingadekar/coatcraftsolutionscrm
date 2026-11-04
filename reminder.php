@@ -173,6 +173,57 @@ function sendDueReviewRequests($companyId) {
     return $results;
 }
 
+// Morning WhatsApp to the owner (DAILY_SUMMARY_PHONE): yesterday's new
+// enquiries, today's site visits, quotations still to send (site visit done
+// but lead still New/Contacted) and follow-ups due. The hourly cron sends it
+// once a day, on the first run at or after DAILY_SUMMARY_HOUR (IST);
+// $force (manual ?summary=1) skips the hour/once-a-day checks for testing
+// and isn't logged, so a test never cancels that day's automatic send.
+function sendOwnerDailySummary($companyId, $force = false) {
+    global $conn;
+    if (!defined('DAILY_SUMMARY_PHONE') || DAILY_SUMMARY_PHONE === ''
+        || (int) $companyId !== (int) DAILY_SUMMARY_COMPANY_ID) {
+        return [];
+    }
+
+    $now = new DateTime('now', new DateTimeZone('Asia/Kolkata'));
+    $today = $now->format('Y-m-d');
+    $sendHour = defined('DAILY_SUMMARY_HOUR') ? (int) DAILY_SUMMARY_HOUR : 8;
+
+    if (!$force) {
+        if ((int) $now->format('G') < $sendHour) {
+            return ["Daily summary: waiting until {$sendHour}:00 IST."];
+        }
+        $stmt = $conn->prepare("SELECT 1 FROM owner_daily_summary_log WHERE company_id = ? AND summary_date = ?");
+        $stmt->bind_param('is', $companyId, $today);
+        $stmt->execute();
+        $alreadySent = (bool) $stmt->get_result()->fetch_row();
+        $stmt->close();
+        if ($alreadySent) {
+            return ['Daily summary: already sent today.'];
+        }
+    }
+
+    $summary = buildOwnerDailySummary($conn, $companyId);
+
+    // Owner messaged the business number in the last 24h → free-form text allowed.
+    $ownerDigits = substr(preg_replace('/\D/', '', DAILY_SUMMARY_PHONE), -10);
+    $stmt = $conn->prepare("SELECT 1 FROM whatsapp_inbound_messages WHERE company_id = ? AND RIGHT(phone, 10) = ? AND received_at >= NOW() - INTERVAL 23 HOUR LIMIT 1");
+    $stmt->bind_param('is', $companyId, $ownerDigits);
+    $stmt->execute();
+    $recent = (bool) $stmt->get_result()->fetch_row();
+    $stmt->close();
+
+    $sent = sendOwnerDailySummaryWhatsApp(DAILY_SUMMARY_PHONE, $summary['text'], $summary['params'], $recent);
+    if ($sent && !$force) {
+        $stmt = $conn->prepare("INSERT IGNORE INTO owner_daily_summary_log (company_id, summary_date) VALUES (?, ?)");
+        $stmt->bind_param('is', $companyId, $today);
+        $stmt->execute();
+        $stmt->close();
+    }
+    return ['Daily summary (' . ($recent ? 'text' : 'template') . '): ' . ($sent ? 'sent' : 'failed')];
+}
+
 $run = isset($_GET['run']) || $isCronRun;
 $results = [];
 if ($run && $isCronRun) {
@@ -181,11 +232,14 @@ if ($run && $isCronRun) {
     foreach ($companies as $company) {
         $results[] = "=== {$company['name']} (company_id={$company['id']}) ===";
         $results = array_merge($results, runReminderChecks((int)$company['id']));
+        $results = array_merge($results, sendOwnerDailySummary((int)$company['id']));
     }
     file_put_contents(__DIR__ . '/cron-log.txt', date('Y-m-d H:i:s') . ' cron ran, companies=' . count($companies) . "\n", FILE_APPEND);
 } elseif ($run) {
     // Manual browser test: scope to the logged-in user's own company only.
-    $results = runReminderChecks(current_company_id());
+    $results = isset($_GET['summary'])
+        ? sendOwnerDailySummary(current_company_id(), true)
+        : runReminderChecks(current_company_id());
 }
 ?>
 <!DOCTYPE html>
@@ -210,6 +264,7 @@ if ($run && $isCronRun) {
         <p class="note">If a follow-up date is before today and still open, it will send an overdue notification.</p>
         <p class="note">If a site visit is scheduled for <strong>today</strong>, it will send a "Site Visit Today" reminder too.</p>
         <a class="button" href="?run=1">Run Reminder Check</a>
+        <a class="button" href="?run=1&amp;summary=1">Send Daily WhatsApp Summary Now</a>
         <?php if ($run): ?>
             <div class="result"><?php echo implode("\n", array_map('htmlspecialchars', $results)); ?></div>
         <?php endif; ?>

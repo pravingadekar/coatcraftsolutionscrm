@@ -344,6 +344,29 @@ function sendReengageWhatsApp(string $phone, string $name, string $tenantName): 
     }
 }
 
+/* Owner's morning summary (reminder.php). Free-form text only reaches the
+   owner inside the 24h window after they last messaged the business number
+   (and Meta won't say so synchronously, see sendViaWhatsAppCloudApiText()),
+   so outside that window it needs the approved WA_TEMPLATE_DAILY_SUMMARY
+   template. $templateParams: [date, new enquiries, site visits, quotations
+   to send, follow-ups due] — single-line strings, Meta rejects newlines. */
+function sendOwnerDailySummaryWhatsApp(string $phone, string $fullText, array $templateParams, bool $insideWindow): bool {
+    $recipient = normalizeIndianPhoneForSms($phone);
+    if ($recipient === null) {
+        return false;
+    }
+    $hasTemplate = defined('WA_TEMPLATE_DAILY_SUMMARY') && WA_TEMPLATE_DAILY_SUMMARY !== '';
+    try {
+        if ($insideWindow || !$hasTemplate) {
+            return sendViaWhatsAppCloudApiText($recipient, $fullText);
+        }
+        return sendViaWhatsAppCloudApi($recipient, WA_TEMPLATE_DAILY_SUMMARY, WA_TEMPLATE_LANG, $templateParams);
+    } catch (\Throwable $e) {
+        error_log('sendOwnerDailySummaryWhatsApp failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
 /* Sends the WhatsApp missed-call thank-you template, triggered by
    missed-call-sms.php's MacroDroid webhook when a call to the business
    number goes unanswered. No caller name is known at that point, so the
